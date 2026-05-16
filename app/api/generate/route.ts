@@ -30,6 +30,7 @@ type RequestBody = {
     material?: string;
     lighting?: string;
     realism?: number;
+    shapeDetail?: number;
     placement?: {
         x?: number;
         y?: number;
@@ -72,17 +73,36 @@ function shouldUseReferenceAsInitImage(options: {
     respectReference: number;
     productType?: string;
     userPrompt?: string;
+    shapeDetail: number;
 }) {
-    const { refImage, generateMode, respectReference, productType, userPrompt } =
-        options;
+    const {
+        refImage,
+        generateMode,
+        respectReference,
+        productType,
+        userPrompt,
+        shapeDetail,
+    } = options;
 
     if (!refImage) return false;
 
     const combined = `${productType || ""} ${userPrompt || ""}`;
 
-    if (isFoodSubject(combined) && respectReference < 92) return false;
+    if (isFoodSubject(combined) && respectReference < 94) {
+        return false;
+    }
 
-    if (generateMode === "replica" && respectReference >= 88) return true;
+    if (shapeDetail < 45) {
+        return false;
+    }
+
+    if (generateMode === "replica" && respectReference >= 86) {
+        return true;
+    }
+
+    if (respectReference >= 92 && shapeDetail >= 65) {
+        return true;
+    }
 
     return false;
 }
@@ -95,13 +115,14 @@ function getProductTypePrompt(productType?: string, userPrompt?: string) {
 PRODUCT TYPE: GIANT INFLATABLE BURGER PROMOTIONAL REPLICA.
 
 Mandatory geometry:
-- simplified air-filled burger silhouette;
-- large rounded bun volumes;
+- the subject is a burger, but it must be clearly an inflatable advertising object;
+- simplified rounded bun volumes;
 - simplified inflated cheese / lettuce / patty layers;
-- all layers must look like PVC inflatable tubes or soft inflated panels;
-- avoid realistic edible detail;
-- no wet food material;
-- no real food photography;
+- soft PVC surfaces;
+- all details must be converted into air-filled inflatable forms or printed PVC graphics;
+- no real edible food material;
+- no wet food texture;
+- no realistic restaurant-food look;
 - stable giant promotional inflatable, suitable for rooftop or event placement.
 `.trim();
     }
@@ -192,14 +213,14 @@ Mandatory geometry:
 }
 
 function getModePrompt(mode: GenerateMode, respectReference: number) {
-    if (mode === "replica" || respectReference >= 88) {
+    if (mode === "replica" || respectReference >= 86) {
         return `
-GENERATION MODE: STRICT INFLATABLE REPLICA.
+GENERATION MODE: CONTROLLED INFLATABLE REPLICA.
 
 Rules:
 - preserve the requested subject;
-- preserve reference shape only when reference is provided and relevant;
-- convert the design into a real commercial inflatable;
+- preserve reference shape when a reference is provided;
+- convert the result into a real commercial inflatable object;
 - do not generate ordinary real objects;
 - do not generate scenery;
 - do not modify or include the uploaded background photo.
@@ -214,7 +235,7 @@ Rules:
 - clean commercial visualization;
 - realistic PVC material;
 - manufacturable shape;
-- controlled amount of detail;
+- controlled level of form detail;
 - no scenery or background.
 `.trim();
     }
@@ -225,7 +246,7 @@ GENERATION MODE: CLEAN MOCKUP.
 Rules:
 - simple geometry;
 - very readable silhouette;
-- minimal wrinkles;
+- minimal surface detail;
 - commercial mockup style;
 - no scenery or background.
 `.trim();
@@ -240,6 +261,7 @@ function getReferencePrompt(options: {
     hasRefImage: boolean;
     hasTextureImage: boolean;
     usingRefAsInitImage: boolean;
+    shapeDetail: number;
 }) {
     const {
         respectReference,
@@ -250,12 +272,14 @@ function getReferencePrompt(options: {
         hasRefImage,
         hasTextureImage,
         usingRefAsInitImage,
+        shapeDetail,
     } = options;
 
     let prompt = `
 REFERENCE CONTROL:
 Reference strength: ${respectReference}/100.
 Reference direct image-to-image: ${usingRefAsInitImage ? "ON" : "OFF"}.
+Shape detail level: ${shapeDetail}/100.
 `.trim();
 
     if (hasRefImage) {
@@ -266,12 +290,12 @@ Use it as product design reference only.`;
 
         if (respectShape) {
             prompt += `
-- preserve the recognizable shape and silhouette logic;`;
+- preserve the recognizable shape and silhouette logic from the reference;`;
         }
 
         if (respectProportions) {
             prompt += `
-- preserve approximate proportions;`;
+- preserve approximate proportions from the reference;`;
         }
 
         if (respectTexture) {
@@ -282,6 +306,22 @@ Use it as product design reference only.`;
         if (respectBranding) {
             prompt += `
 - preserve branding placement only if clearly visible; do not invent random text;`;
+        }
+
+        if (shapeDetail <= 25) {
+            prompt += `
+- simplify the reference aggressively into large primitive inflatable volumes;
+- keep only the main silhouette and major color zones;`;
+        } else if (shapeDetail <= 50) {
+            prompt += `
+- simplify the reference into clean inflatable volumes;
+- preserve main recognizable forms but remove small details;`;
+        } else if (shapeDetail <= 80) {
+            prompt += `
+- preserve most of the reference form while converting details into PVC panels and printed graphics;`;
+        } else {
+            prompt += `
+- preserve the reference form closely, but still make it fabricable as a real inflatable object;`;
         }
 
         prompt += `
@@ -356,9 +396,12 @@ function getLightingPrompt(lighting: string) {
         return `
 LIGHTING:
 Night-compatible object lighting.
-Darker overall exposure, strong controlled highlights, optional soft glow only if material supports it.
-No daylight shadows.
-No sunny look.
+Dark-scene compatible shading.
+Controlled specular highlights.
+If the material is translucent or LED interior, add soft internal glow.
+Do not use daylight shadows.
+Do not create a sunny look.
+The object should visually fit a nighttime placement.
 `.trim();
     }
 
@@ -366,7 +409,10 @@ No sunny look.
         return `
 LIGHTING:
 Warm golden-hour object lighting.
-Amber highlights, soft long-shadow direction, warm commercial outdoor mood.
+Amber highlights.
+Soft warm directional light.
+Subtle long-shadow direction.
+Commercial outdoor evening mood.
 `.trim();
     }
 
@@ -374,56 +420,93 @@ Amber highlights, soft long-shadow direction, warm commercial outdoor mood.
         return `
 LIGHTING:
 Interior-compatible object lighting.
-Soft controlled indoor reflections and subdued shadows.
+Soft controlled indoor reflections.
+Subdued shadows.
+No outdoor sunlight.
 `.trim();
     }
 
     return `
 LIGHTING:
 Daylight-compatible object lighting.
-Natural outdoor highlights, clean neutral exposure, no night glow.
+Natural outdoor daylight.
+Clean neutral exposure.
+Soft realistic object shading.
+No night glow.
+No dark night exposure.
 `.trim();
 }
 
-function getDetailPrompt(realism: number) {
-    if (realism <= 20) {
+function getShapeDetailPrompt(shapeDetail: number) {
+    if (shapeDetail <= 20) {
         return `
-DETAIL LEVEL: VERY SIMPLE.
-Build from basic inflated primitive shapes only.
-Large clean volumes.
-Almost no seams.
-No small details.
-No wrinkles.
-Toy-block simplicity but with PVC inflatable material.
+FORM COMPLEXITY:
+Very simple inflatable form.
+Build from large primitive inflated shapes only.
+Clear readable silhouette.
+No small geometry.
+No complex topology.
+No decorative micro-details.
+The object should look like a clean classic inflatable made from a few big PVC volumes.
+
+WRINKLES / PVC FEEL:
+Always keep only subtle PVC tension marks.
+Do not increase wrinkles because of this slider.
 `.trim();
     }
 
-    if (realism <= 45) {
+    if (shapeDetail <= 45) {
         return `
-DETAIL LEVEL: SIMPLE COMMERCIAL.
-Simple inflated forms.
-Few seams.
-Very subtle wrinkles only.
-Clear silhouette.
-Avoid small noisy details.
+FORM COMPLEXITY:
+Simple commercial inflatable form.
+Use large rounded inflated volumes.
+Preserve the subject identity, but simplify secondary details.
+Small details should become printed graphics or simplified soft PVC forms.
+
+WRINKLES / PVC FEEL:
+Only subtle tension wrinkles near seams and edges.
+No deep folds.
 `.trim();
     }
 
-    if (realism <= 70) {
+    if (shapeDetail <= 70) {
         return `
-DETAIL LEVEL: BALANCED.
-Moderate seams.
-Mild PVC tension lines.
-Controlled wrinkles.
-Professional inflatable visualization.
+FORM COMPLEXITY:
+Balanced inflatable form.
+Preserve recognizable subject proportions and medium-size details.
+Convert complex details into fabricable PVC panel logic.
+Keep the shape clean and stable.
+
+WRINKLES / PVC FEEL:
+Subtle PVC tension, mild seam definition, no excessive fabric folding.
+`.trim();
+    }
+
+    if (shapeDetail <= 90) {
+        return `
+FORM COMPLEXITY:
+Detailed inflatable form.
+Preserve most important silhouette details and reference features.
+Use welded PVC panel logic for detail.
+Keep fabricability and stable air-filled construction.
+
+WRINKLES / PVC FEEL:
+Controlled subtle PVC tension only.
+Do not create damaged or deflated wrinkles.
 `.trim();
     }
 
     return `
-DETAIL LEVEL: DETAILED.
-Visible seams and PVC tension.
-Still clean, pressurized and professional.
-Avoid chaotic folds and deflated fabric.
+FORM COMPLEXITY:
+Very detailed inflatable replica.
+Preserve the reference shape closely where possible.
+Keep the object manufacturable as PVC inflatable panels.
+Complex details should still be simplified into inflatable construction or printed surface graphics.
+
+WRINKLES / PVC FEEL:
+Subtle PVC tension marks only.
+No chaotic folds.
+No deflated fabric.
 `.trim();
 }
 
@@ -439,7 +522,7 @@ Width: ${widthM.toFixed(1)} meters.
 Length / depth: ${depthM.toFixed(1)} meters.
 
 Rules:
-- Respect the height/width/length ratio in the generated object.
+- Respect the height / width / length ratio in the generated object.
 - These are product dimensions, not background dimensions.
 - Frontend handles final placement and scale over the photo.
 `.trim();
@@ -448,7 +531,7 @@ Rules:
 function getNegativePrompt(options: {
     generateMode: GenerateMode;
     respectReference: number;
-    realism: number;
+    shapeDetail: number;
     lighting: string;
     userPrompt: string;
     productType: string;
@@ -456,7 +539,7 @@ function getNegativePrompt(options: {
     const {
         generateMode,
         respectReference,
-        realism,
+        shapeDetail,
         lighting,
         userPrompt,
         productType,
@@ -500,17 +583,23 @@ wrong scale,
 watermark,
 random text,
 misspelled text,
-logo artifacts
-`.trim();
-
-    if (realism <= 45) {
-        negative += `,
-many wrinkles,
-deep folds,
-complex noisy surface,
+logo artifacts,
+deflated fabric,
 damaged fabric,
 dirty PVC,
-overdetailed geometry`;
+chaotic folds,
+excessive wrinkles,
+deep folds
+`.trim();
+
+    if (shapeDetail <= 45) {
+        negative += `,
+many small details,
+complex noisy surface,
+overdetailed geometry,
+high frequency detail,
+tiny parts,
+complex topology`;
     }
 
     if (lighting === "Noapte") {
@@ -538,7 +627,6 @@ hyperrealistic food photo`;
 
     if (generateMode === "replica" || respectReference >= 88) {
         negative += `,
-creative redesign,
 unrelated object,
 ignoring requested subject`;
     }
@@ -612,7 +700,7 @@ export async function POST(req: Request) {
             dimensions,
             material = "PVC lucios",
             lighting = "Zi",
-            realism = 45,
+            shapeDetail = 35,
         } = body;
 
         const stabilityKey = process.env.STABILITY_API_KEY;
@@ -635,7 +723,7 @@ export async function POST(req: Request) {
         const respectTexture = referenceControl?.respectTexture ?? true;
         const respectProportions = referenceControl?.respectProportions ?? true;
         const respectBranding = referenceControl?.respectBranding ?? true;
-        const realismValue = clamp(Number(realism), 0, 100);
+        const shapeDetailValue = clamp(Number(shapeDetail), 0, 100);
 
         const usingRefAsInitImage = shouldUseReferenceAsInitImage({
             refImage,
@@ -643,6 +731,7 @@ export async function POST(req: Request) {
             respectReference,
             productType,
             userPrompt,
+            shapeDetail: shapeDetailValue,
         });
 
         const geminiAnalysis = refImage
@@ -689,6 +778,7 @@ ${getReferencePrompt({
     hasRefImage: Boolean(refImage),
     hasTextureImage: Boolean(textureImage),
     usingRefAsInitImage,
+    shapeDetail: shapeDetailValue,
 })}
 
 ${geminiPrompt}
@@ -699,13 +789,15 @@ ${getMaterialPrompt(material)}
 
 ${getLightingPrompt(lighting)}
 
-${getDetailPrompt(realismValue)}
+${getShapeDetailPrompt(shapeDetailValue)}
 
 ABSOLUTE OUTPUT:
 - one single inflatable object;
 - transparent background;
 - complete object, not cropped;
 - PVC air-filled appearance;
+- soft rounded inflated edges;
+- subtle PVC tension only;
 - no scene;
 - no building;
 - no street;
@@ -720,7 +812,7 @@ ABSOLUTE OUTPUT:
         const negativePrompt = getNegativePrompt({
             generateMode,
             respectReference,
-            realism: realismValue,
+            shapeDetail: shapeDetailValue,
             lighting,
             userPrompt,
             productType,
@@ -737,11 +829,11 @@ ABSOLUTE OUTPUT:
             formData.append("mode", "image-to-image");
 
             const strength =
-                respectReference >= 95
-                    ? "0.28"
-                    : respectReference >= 88
-                      ? "0.34"
-                      : "0.44";
+                respectReference >= 96 && shapeDetailValue >= 75
+                    ? "0.26"
+                    : respectReference >= 90 && shapeDetailValue >= 60
+                      ? "0.32"
+                      : "0.42";
 
             formData.append("strength", strength);
         } else {
@@ -838,7 +930,7 @@ ABSOLUTE OUTPUT:
                 respectReference,
                 material,
                 lighting,
-                realism: realismValue,
+                shapeDetail: shapeDetailValue,
                 dimensions,
                 usingRefAsInitImage,
                 geminiAnalysis,
