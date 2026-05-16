@@ -88,19 +88,15 @@ function shouldUseReferenceAsInitImage(options: {
 
     const combined = `${productType || ""} ${userPrompt || ""}`;
 
-    if (isFoodSubject(combined) && respectReference < 94) {
-        return false;
-    }
+    if (shapeDetail <= 35) return false;
 
-    if (shapeDetail < 45) {
-        return false;
-    }
+    if (isFoodSubject(combined) && respectReference < 96) return false;
 
-    if (generateMode === "replica" && respectReference >= 86) {
+    if (generateMode === "replica" && respectReference >= 90 && shapeDetail >= 55) {
         return true;
     }
 
-    if (respectReference >= 92 && shapeDetail >= 65) {
+    if (respectReference >= 94 && shapeDetail >= 70) {
         return true;
     }
 
@@ -118,11 +114,13 @@ Mandatory geometry:
 - the subject is a burger, but it must be clearly an inflatable advertising object;
 - simplified rounded bun volumes;
 - simplified inflated cheese / lettuce / patty layers;
-- soft PVC surfaces;
-- all details must be converted into air-filled inflatable forms or printed PVC graphics;
-- no real edible food material;
-- no wet food texture;
-- no realistic restaurant-food look;
+- all layers must be soft, rounded, air-filled PVC volumes;
+- avoid realistic edible food construction;
+- no wet food material;
+- no detailed meat surface;
+- no detailed lettuce leaf edges;
+- no real sesame seed texture as geometry;
+- if sesame seeds appear, they must be simple printed dots on the PVC bun;
 - stable giant promotional inflatable, suitable for rooftop or event placement.
 `.trim();
     }
@@ -219,7 +217,7 @@ GENERATION MODE: CONTROLLED INFLATABLE REPLICA.
 
 Rules:
 - preserve the requested subject;
-- preserve reference shape when a reference is provided;
+- preserve reference shape when a reference is provided and the detail slider allows it;
 - convert the result into a real commercial inflatable object;
 - do not generate ordinary real objects;
 - do not generate scenery;
@@ -308,15 +306,23 @@ Use it as product design reference only.`;
 - preserve branding placement only if clearly visible; do not invent random text;`;
         }
 
-        if (shapeDetail <= 25) {
+        if (shapeDetail <= 15) {
             prompt += `
-- simplify the reference aggressively into large primitive inflatable volumes;
-- keep only the main silhouette and major color zones;`;
-        } else if (shapeDetail <= 50) {
+- aggressively simplify the reference into only the largest primitive inflated volumes;
+- remove almost all secondary geometry;
+- preserve only the big silhouette and major color zones;
+- texture may remain photorealistic, but geometry must stay very simple and rounded;`;
+        } else if (shapeDetail <= 35) {
             prompt += `
-- simplify the reference into clean inflatable volumes;
-- preserve main recognizable forms but remove small details;`;
-        } else if (shapeDetail <= 80) {
+- simplify the reference into clean large inflatable volumes;
+- preserve only main recognizable forms;
+- remove small and medium geometry;
+- convert small details into printed graphics, not 3D relief;`;
+        } else if (shapeDetail <= 60) {
+            prompt += `
+- preserve main recognizable forms and some medium details;
+- simplify small details into PVC print or broad shapes;`;
+        } else if (shapeDetail <= 85) {
             prompt += `
 - preserve most of the reference form while converting details into PVC panels and printed graphics;`;
         } else {
@@ -349,7 +355,8 @@ function getMaterialPrompt(material: string) {
         return `
 MATERIAL:
 Glossy inflatable PVC.
-Smooth air-filled surface, soft specular highlights, welded seams, flexible pressurized material.
+Smooth air-filled surface, soft specular highlights, flexible pressurized material.
+Texture can be photorealistic as a printed PVC surface, but the geometry must remain soft and inflatable.
 `.trim();
     }
 
@@ -357,7 +364,8 @@ Smooth air-filled surface, soft specular highlights, welded seams, flexible pres
         return `
 MATERIAL:
 Matte inflatable PVC.
-Soft diffuse reflections, clean professional PVC fabric look, welded seams.
+Soft diffuse reflections, clean professional PVC fabric look.
+Texture can be photorealistic as a printed PVC surface, but the geometry must remain soft and inflatable.
 `.trim();
     }
 
@@ -381,7 +389,7 @@ Soft internal LED glow through the material.
         return `
 MATERIAL:
 Heavy-duty outdoor inflatable PVC.
-Reinforced seams, robust event-grade construction, durable fabric texture.
+Reinforced but subtle seams, robust event-grade construction, durable fabric texture.
 `.trim();
     }
 
@@ -438,32 +446,72 @@ No dark night exposure.
 }
 
 function getShapeDetailPrompt(shapeDetail: number) {
-    if (shapeDetail <= 20) {
+    if (shapeDetail <= 10) {
         return `
 FORM COMPLEXITY:
-Very simple inflatable form.
-Build from large primitive inflated shapes only.
-Clear readable silhouette.
-No small geometry.
-No complex topology.
-No decorative micro-details.
-The object should look like a clean classic inflatable made from a few big PVC volumes.
+ULTRA SIMPLE INFLATABLE SHAPE.
+This is the most important instruction.
+Build the object from only a few large rounded primitive inflatable volumes.
+Use smooth blobs, cylinders, torus-like tubes, spheres, capsules and rounded pillow forms.
+The outer silhouette must be simple, clean and rounded.
+No jagged edges.
+No thin geometry.
+No tiny protrusions.
+No complex cutouts.
+No detailed relief.
+No many layers.
+No small physical details.
+No high-frequency geometry.
+All small details must become flat printed color/texture on the PVC surface.
+For a burger: make it like a simplified inflatable cartoon burger made of 4-5 big rounded air-filled layers, not a realistic burger.
 
-WRINKLES / PVC FEEL:
-Always keep only subtle PVC tension marks.
-Do not increase wrinkles because of this slider.
+TEXTURE:
+Texture may still be photorealistic as printed PVC color/material.
+Photorealistic material is allowed.
+Photorealistic complex geometry is not allowed.
+
+PVC FEEL:
+Subtle PVC tension only.
+Almost invisible wrinkles.
+No deep folds.
+No rough food texture.
+`.trim();
+    }
+
+    if (shapeDetail <= 25) {
+        return `
+FORM COMPLEXITY:
+VERY SIMPLE INFLATABLE FORM.
+Use large primitive inflated shapes.
+Clear readable silhouette.
+Very few geometry parts.
+Secondary details must be printed, not modeled.
+The object should look like a classic advertising inflatable made from big PVC volumes.
+
+TEXTURE:
+Surface can have photorealistic printed color/material.
+Geometry remains simple and rounded.
+
+PVC FEEL:
+Only subtle PVC tension marks.
+No deep folds.
+No complex surface relief.
 `.trim();
     }
 
     if (shapeDetail <= 45) {
         return `
 FORM COMPLEXITY:
-Simple commercial inflatable form.
+SIMPLE COMMERCIAL INFLATABLE FORM.
 Use large rounded inflated volumes.
-Preserve the subject identity, but simplify secondary details.
+Preserve subject identity, but simplify secondary details.
 Small details should become printed graphics or simplified soft PVC forms.
 
-WRINKLES / PVC FEEL:
+TEXTURE:
+Photorealistic printed PVC surface is allowed.
+Do not make the geometry overly detailed.
+
+PVC FEEL:
 Only subtle tension wrinkles near seams and edges.
 No deep folds.
 `.trim();
@@ -472,12 +520,15 @@ No deep folds.
     if (shapeDetail <= 70) {
         return `
 FORM COMPLEXITY:
-Balanced inflatable form.
+BALANCED INFLATABLE FORM.
 Preserve recognizable subject proportions and medium-size details.
 Convert complex details into fabricable PVC panel logic.
 Keep the shape clean and stable.
 
-WRINKLES / PVC FEEL:
+TEXTURE:
+Photorealistic printed surface and PVC highlights.
+
+PVC FEEL:
 Subtle PVC tension, mild seam definition, no excessive fabric folding.
 `.trim();
     }
@@ -485,12 +536,15 @@ Subtle PVC tension, mild seam definition, no excessive fabric folding.
     if (shapeDetail <= 90) {
         return `
 FORM COMPLEXITY:
-Detailed inflatable form.
+DETAILED INFLATABLE FORM.
 Preserve most important silhouette details and reference features.
 Use welded PVC panel logic for detail.
 Keep fabricability and stable air-filled construction.
 
-WRINKLES / PVC FEEL:
+TEXTURE:
+Photorealistic PVC surface and printed texture allowed.
+
+PVC FEEL:
 Controlled subtle PVC tension only.
 Do not create damaged or deflated wrinkles.
 `.trim();
@@ -498,12 +552,15 @@ Do not create damaged or deflated wrinkles.
 
     return `
 FORM COMPLEXITY:
-Very detailed inflatable replica.
+VERY DETAILED INFLATABLE REPLICA.
 Preserve the reference shape closely where possible.
 Keep the object manufacturable as PVC inflatable panels.
 Complex details should still be simplified into inflatable construction or printed surface graphics.
 
-WRINKLES / PVC FEEL:
+TEXTURE:
+Photorealistic PVC surface and printed texture allowed.
+
+PVC FEEL:
 Subtle PVC tension marks only.
 No chaotic folds.
 No deflated fabric.
@@ -565,7 +622,7 @@ food photography,
 wet food texture,
 real meat texture,
 real lettuce texture,
-real sesame detail,
+real sesame geometry,
 hard sculpture,
 rigid plastic,
 metal,
@@ -589,17 +646,52 @@ damaged fabric,
 dirty PVC,
 chaotic folds,
 excessive wrinkles,
-deep folds
+deep folds,
+jagged silhouette,
+sharp irregular edge,
+thin protrusions,
+complex cutouts,
+high frequency geometry
 `.trim();
 
-    if (shapeDetail <= 45) {
+    if (shapeDetail <= 10) {
+        negative += `,
+detailed geometry,
+small geometry,
+many parts,
+many layers,
+complex shape,
+realistic food shape,
+realistic burger geometry,
+detailed lettuce,
+detailed meat,
+detailed sesame seeds,
+wrinkled fabric,
+seam-heavy construction,
+bumpy surface,
+rough surface,
+thin edges,
+irregular silhouette,
+jagged food outline,
+tiny details,
+fine detail`;
+    } else if (shapeDetail <= 25) {
         negative += `,
 many small details,
 complex noisy surface,
 overdetailed geometry,
 high frequency detail,
 tiny parts,
-complex topology`;
+complex topology,
+realistic food geometry,
+jagged food edge`;
+    } else if (shapeDetail <= 45) {
+        negative += `,
+overdetailed geometry,
+tiny parts,
+complex topology,
+deep folds,
+noisy silhouette`;
     }
 
     if (lighting === "Noapte") {
@@ -622,7 +714,9 @@ ordinary burger,
 real hamburger,
 restaurant food,
 edible food,
-hyperrealistic food photo`;
+hyperrealistic food photo,
+food photography,
+food macro texture`;
     }
 
     if (generateMode === "replica" || respectReference >= 88) {
@@ -797,6 +891,8 @@ ABSOLUTE OUTPUT:
 - complete object, not cropped;
 - PVC air-filled appearance;
 - soft rounded inflated edges;
+- simple clean outer silhouette when detail slider is low;
+- texture may be photorealistic, but geometry must follow the selected detail level;
 - subtle PVC tension only;
 - no scene;
 - no building;
