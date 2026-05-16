@@ -89,7 +89,8 @@ export default function Page() {
 
     const [material, setMaterial] = useState<MaterialMode>("PVC lucios");
     const [lighting, setLighting] = useState("Zi");
-    const [realism, setRealism] = useState(45);
+
+    const [shapeDetail, setShapeDetail] = useState(35);
 
     const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -180,8 +181,8 @@ export default function Page() {
 
         return {
             stageRect: rect,
-            imageLeft: rect.left + offsetX,
-            imageTop: rect.top + offsetY,
+            imageLeft: offsetX,
+            imageTop: offsetY,
             imageWidth: renderWidth,
             imageHeight: renderHeight,
         };
@@ -193,25 +194,22 @@ export default function Page() {
         const imageRect = getContainedImageRect();
         if (!imageRect) return;
 
-        const clampedClientX = Math.max(
+        const stageRect = imageRect.stageRect;
+        const clickX = event.clientX - stageRect.left;
+        const clickY = event.clientY - stageRect.top;
+
+        const clampedX = Math.max(
             imageRect.imageLeft,
-            Math.min(imageRect.imageLeft + imageRect.imageWidth, event.clientX)
+            Math.min(imageRect.imageLeft + imageRect.imageWidth, clickX)
         );
 
-        const clampedClientY = Math.max(
+        const clampedY = Math.max(
             imageRect.imageTop,
-            Math.min(imageRect.imageTop + imageRect.imageHeight, event.clientY)
+            Math.min(imageRect.imageTop + imageRect.imageHeight, clickY)
         );
 
-        const x =
-            ((clampedClientX - imageRect.stageRect.left) /
-                imageRect.stageRect.width) *
-            100;
-
-        const y =
-            ((clampedClientY - imageRect.stageRect.top) /
-                imageRect.stageRect.height) *
-            100;
+        const x = (clampedX / stageRect.width) * 100;
+        const y = (clampedY / stageRect.height) * 100;
 
         setPosX(Math.max(0, Math.min(100, x)));
         setPosY(Math.max(0, Math.min(100, y)));
@@ -257,7 +255,7 @@ export default function Page() {
                     },
                     material,
                     lighting,
-                    realism,
+                    shapeDetail,
                     placement: {
                         x: posX,
                         y: posY,
@@ -579,11 +577,14 @@ export default function Page() {
                             />
 
                             <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                Lățime și adâncime estimate automat după tip:
+                                Dimensiuni estimate:
                                 <br />
                                 <strong style={{ color: "#FFFFFF" }}>
-                                    {derived.widthM.toFixed(1)} ×{" "}
-                                    {heightM.toFixed(1)} ×{" "}
+                                    Înălțime: {heightM.toFixed(1)} m
+                                    <br />
+                                    Lățime: {derived.widthM.toFixed(1)} m
+                                    <br />
+                                    Lungime / adâncime:{" "}
                                     {derived.depthM.toFixed(1)} m
                                 </strong>
                             </div>
@@ -685,9 +686,11 @@ export default function Page() {
                                 style={{ marginTop: 14 }}
                             >
                                 <div className="aztec-label">
-                                    Nivel detalii / cute
+                                    Detaliu formă
                                 </div>
-                                <div className="aztec-slider-value">{realism}%</div>
+                                <div className="aztec-slider-value">
+                                    {shapeDetail}%
+                                </div>
                             </div>
 
                             <input
@@ -695,12 +698,19 @@ export default function Page() {
                                 type="range"
                                 min={0}
                                 max={100}
-                                value={realism}
+                                value={shapeDetail}
                                 onChange={(e) => {
-                                    setRealism(Number(e.target.value));
+                                    setShapeDetail(Number(e.target.value));
                                     setOverlayUrl(null);
                                 }}
                             />
+
+                            <div className="aztec-info-box" style={{ marginTop: 12 }}>
+                                Minim = forme simple, volum mare, puține detalii.
+                                Maxim = formă mai apropiată de obiect / referință.
+                                Cutele rămân subtile, doar cât să se simtă materialul
+                                gonflabil.
+                            </div>
                         </div>
                     </section>
 
