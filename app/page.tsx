@@ -10,6 +10,32 @@ type MaterialMode =
     | "LED interior"
     | "Outdoor heavy-duty";
 
+type ProductType =
+    | "Arcadă"
+    | "Mascotă"
+    | "Cupolă"
+    | "Cort"
+    | "Tunel"
+    | "Sticlă"
+    | "Custom";
+
+const PRODUCT_PRESETS: Record<ProductType, string> = {
+    Arcadă:
+        "Arcadă gonflabilă publicitară premium, cu două picioare verticale stabile și traversă superioară rotunjită, proporții realiste, PVC lucios, construcție fabricabilă.",
+    Mascotă:
+        "Mascotă gonflabilă mare, volum rotunjit, expresivă, stabilă, realizabilă în PVC gonflabil, formă simplificată dar recognoscibilă.",
+    Cupolă:
+        "Cupolă gonflabilă pentru eveniment, volum mare rotunjit, structură stabilă, material PVC rezistent outdoor, aspect premium.",
+    Cort:
+        "Cort gonflabil pentru eveniment, structură tubulară gonflabilă, acoperiș moale, proporții realiste, aspect premium.",
+    Tunel:
+        "Tunel gonflabil mare pentru evenimente sportive, structură lungă, intrare rotunjită, PVC lucios, stabil pe sol.",
+    Sticlă:
+        "Replică gonflabilă de produs în formă de sticlă, proporții recognoscibile, volum moale, PVC lucios, fabricabilă.",
+    Custom:
+        "Obiect gonflabil personalizat, realist, fabricabil, cu formă stabilă, material PVC profesional și proporții comerciale.",
+};
+
 export default function Page() {
     const [sceneImage, setSceneImage] = useState<string | null>(null);
     const [sceneBase64, setSceneBase64] = useState<string | null>(null);
@@ -17,37 +43,39 @@ export default function Page() {
     const [refImage, setRefImage] = useState<string | null>(null);
     const [textureImage, setTextureImage] = useState<string | null>(null);
 
-    const [prompt, setPrompt] = useState(
-        "Arcadă gonflabilă publicitară premium, proporții realiste, PVC lucios, amplasată natural în locație."
-    );
+    const [userPrompt, setUserPrompt] = useState("burger");
+    const [selectedProductType, setSelectedProductType] =
+        useState<ProductType>("Mascotă");
 
-    const [generateMode, setGenerateMode] = useState<GenerateMode>("replica");
+    const [generateMode, setGenerateMode] = useState<GenerateMode>("photo");
 
-    const [respectReference, setRespectReference] = useState(85);
+    const [respectReference, setRespectReference] = useState(65);
     const [respectShape, setRespectShape] = useState(true);
     const [respectTexture, setRespectTexture] = useState(true);
     const [respectProportions, setRespectProportions] = useState(true);
     const [respectBranding, setRespectBranding] = useState(true);
 
-    const [widthM, setWidthM] = useState(6);
-    const [heightM, setHeightM] = useState(4);
+    const [widthM, setWidthM] = useState(3);
+    const [heightM, setHeightM] = useState(3);
     const [depthM, setDepthM] = useState(1.2);
-    const [autoScale, setAutoScale] = useState(true);
+    const [autoScale, setAutoScale] = useState(false);
 
     const [material, setMaterial] = useState<MaterialMode>("PVC lucios");
     const [lighting, setLighting] = useState("Zi");
-    const [realism, setRealism] = useState(80);
+    const [realism, setRealism] = useState(55);
 
     const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const [posX, setPosX] = useState(50);
+    const [posX, setPosX] = useState(54);
     const [posY, setPosY] = useState(72);
-    const [overlayScale, setOverlayScale] = useState(42);
+    const [overlayScale, setOverlayScale] = useState(32);
     const [rotation, setRotation] = useState(0);
 
     const previewRef = useRef<HTMLDivElement | null>(null);
+
+    const fullPrompt = `${userPrompt.trim()}. ${PRODUCT_PRESETS[selectedProductType]}`;
 
     const fileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -100,29 +128,8 @@ export default function Page() {
         setError(null);
     };
 
-    const applyQuickPrompt = (type: string) => {
-        const prompts: Record<string, string> = {
-            Arcadă:
-                "Arcadă gonflabilă publicitară premium, cu două picioare verticale și traversă superioară rotunjită, proporții realiste, PVC lucios.",
-            Mascotă:
-                "Mascotă gonflabilă mare, volum rotunjit, expresivă, stabilă, realizabilă în PVC gonflabil.",
-            Cupolă:
-                "Cupolă gonflabilă eveniment, volum mare, formă rotunjită, material PVC rezistent outdoor.",
-            Cort:
-                "Cort gonflabil pentru eveniment, structură tubulară gonflabilă, acoperiș moale, aspect premium.",
-            Tunel:
-                "Tunel gonflabil mare pentru evenimente sportive, structură lungă, intrare rotunjită, PVC lucios.",
-            Sticlă:
-                "Replică gonflabilă de produs în formă de sticlă, proporții recognoscibile, volum moale, PVC lucios.",
-            Custom:
-                "Obiect gonflabil personalizat, realist, fabricabil, cu formă stabilă și material PVC profesional.",
-        };
-
-        setPrompt(prompts[type] || prompts.Custom);
-    };
-
     const handlePreviewClick = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (!previewRef.current || !sceneImage) return;
+        if (!previewRef.current || !sceneImage || loading) return;
 
         const rect = previewRef.current.getBoundingClientRect();
 
@@ -153,7 +160,10 @@ export default function Page() {
                     sceneImage: sceneBase64,
                     refImage,
                     textureImage,
-                    prompt,
+                    prompt: fullPrompt,
+                    userPrompt,
+                    productPreset: PRODUCT_PRESETS[selectedProductType],
+                    productType: selectedProductType,
                     generateMode,
                     referenceControl: {
                         respectReference,
@@ -171,6 +181,10 @@ export default function Page() {
                     material,
                     lighting,
                     realism,
+                    placement: {
+                        x: posX,
+                        y: posY,
+                    },
                 }),
             });
 
@@ -268,11 +282,12 @@ export default function Page() {
                         <div className="aztec-section-content">
                             <div className="aztec-section-line" />
 
-                            <div className="aztec-label">Descriere</div>
+                            <div className="aztec-label">Descriere scurtă</div>
                             <textarea
                                 className="aztec-textarea"
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
+                                value={userPrompt}
+                                onChange={(e) => setUserPrompt(e.target.value)}
+                                placeholder="Ex: burger, arcadă AZTEC, mascotă urs, sticlă de suc..."
                             />
 
                             <div
@@ -283,33 +298,60 @@ export default function Page() {
                                     marginTop: 12,
                                 }}
                             >
-                                {[
-                                    "Arcadă",
-                                    "Mascotă",
-                                    "Cupolă",
-                                    "Cort",
-                                    "Tunel",
-                                    "Sticlă",
-                                    "Custom",
-                                ].map((chip) => (
-                                    <button
-                                        key={chip}
-                                        type="button"
-                                        onClick={() => applyQuickPrompt(chip)}
-                                        style={{
-                                            border: "1px solid rgba(255,255,255,0.1)",
-                                            background: "rgba(255,255,255,0.04)",
-                                            color: "white",
-                                            borderRadius: 999,
-                                            padding: "8px 12px",
-                                            cursor: "pointer",
-                                            fontWeight: 700,
-                                            fontSize: 12,
-                                        }}
-                                    >
-                                        {chip}
-                                    </button>
-                                ))}
+                                {(
+                                    [
+                                        "Arcadă",
+                                        "Mascotă",
+                                        "Cupolă",
+                                        "Cort",
+                                        "Tunel",
+                                        "Sticlă",
+                                        "Custom",
+                                    ] as ProductType[]
+                                ).map((chip) => {
+                                    const active = selectedProductType === chip;
+
+                                    return (
+                                        <button
+                                            key={chip}
+                                            type="button"
+                                            onClick={() => setSelectedProductType(chip)}
+                                            style={{
+                                                border: active
+                                                    ? "1px solid rgba(255,106,0,0.95)"
+                                                    : "1px solid rgba(255,255,255,0.1)",
+                                                background: active
+                                                    ? "#FF6A00"
+                                                    : "rgba(255,255,255,0.04)",
+                                                color: "white",
+                                                borderRadius: 999,
+                                                padding: "8px 12px",
+                                                cursor: "pointer",
+                                                fontWeight: 800,
+                                                fontSize: 12,
+                                                boxShadow: active
+                                                    ? "0 8px 18px rgba(255,106,0,0.25)"
+                                                    : "none",
+                                            }}
+                                        >
+                                            {chip}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div
+                                className="aztec-info-box"
+                                style={{
+                                    marginTop: 14,
+                                    opacity: 0.88,
+                                }}
+                            >
+                                Prompt complet trimis către AI:
+                                <br />
+                                <strong style={{ color: "#FFFFFF" }}>
+                                    {fullPrompt}
+                                </strong>
                             </div>
                         </div>
                     </section>
@@ -467,8 +509,8 @@ export default function Page() {
                                     <input
                                         className="aztec-slider"
                                         type="range"
-                                        min={1}
-                                        max={20}
+                                        min={0.5}
+                                        max={12}
                                         step={0.1}
                                         value={widthM}
                                         onChange={(e) =>
@@ -487,8 +529,8 @@ export default function Page() {
                                     <input
                                         className="aztec-slider"
                                         type="range"
-                                        min={1}
-                                        max={20}
+                                        min={0.5}
+                                        max={12}
                                         step={0.1}
                                         value={heightM}
                                         onChange={(e) =>
@@ -508,7 +550,7 @@ export default function Page() {
                                         className="aztec-slider"
                                         type="range"
                                         min={0.2}
-                                        max={6}
+                                        max={5}
                                         step={0.1}
                                         value={depthM}
                                         onChange={(e) =>
@@ -530,6 +572,12 @@ export default function Page() {
                                 />
                                 Detectează automat scara din scenă
                             </label>
+
+                            <div className="aztec-info-box" style={{ marginTop: 12 }}>
+                                Recomandare: pentru rezultate controlabile, lasă
+                                Auto-scale dezactivat și setează manual dimensiunea
+                                aproximativă.
+                            </div>
                         </div>
                     </section>
 
@@ -557,7 +605,7 @@ export default function Page() {
                             </select>
 
                             <div className="aztec-label" style={{ marginTop: 12 }}>
-                                Lumină
+                                Lumină / mediu
                             </div>
                             <select
                                 className="aztec-select"
@@ -581,7 +629,7 @@ export default function Page() {
                             <div className="aztec-section-line" />
 
                             <div className="aztec-slider-header">
-                                <div className="aztec-label">Scală</div>
+                                <div className="aztec-label">Scală pe imagine</div>
                                 <div className="aztec-slider-value">
                                     {overlayScale}%
                                 </div>
@@ -621,7 +669,9 @@ export default function Page() {
                                 className="aztec-slider-header"
                                 style={{ marginTop: 14 }}
                             >
-                                <div className="aztec-label">Realism gonflabil</div>
+                                <div className="aztec-label">
+                                    Nivel detalii / cute
+                                </div>
                                 <div className="aztec-slider-value">{realism}%</div>
                             </div>
                             <input
@@ -632,6 +682,11 @@ export default function Page() {
                                 value={realism}
                                 onChange={(e) => setRealism(Number(e.target.value))}
                             />
+
+                            <div className="aztec-info-box" style={{ marginTop: 12 }}>
+                                Recomandare: 35–60 pentru produse curate. Peste 75
+                                poate adăuga prea multe deformări/cute.
+                            </div>
                         </div>
                     </section>
 
@@ -682,6 +737,70 @@ export default function Page() {
                         />
                     )}
 
+                    {loading && (
+                        <div
+                            style={{
+                                position: "absolute",
+                                inset: 0,
+                                zIndex: 20,
+                                background: "rgba(0,0,0,0.38)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                pointerEvents: "none",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    left: `${posX}%`,
+                                    top: `${posY}%`,
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: "50%",
+                                    border: "3px solid rgba(255,255,255,0.85)",
+                                    borderTopColor: "#FF6A00",
+                                    transform: "translate(-50%, -50%)",
+                                    animation: "spin 0.8s linear infinite",
+                                    boxShadow: "0 0 28px rgba(255,106,0,0.55)",
+                                }}
+                            />
+
+                            <div
+                                style={{
+                                    background: "rgba(13,16,22,0.92)",
+                                    border: "1px solid rgba(255,255,255,0.14)",
+                                    borderRadius: 18,
+                                    padding: "18px 22px",
+                                    boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
+                                    textAlign: "center",
+                                    maxWidth: 320,
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: 15,
+                                        fontWeight: 900,
+                                        color: "#FFFFFF",
+                                        marginBottom: 6,
+                                    }}
+                                >
+                                    Se generează simularea...
+                                </div>
+                                <div
+                                    style={{
+                                        fontSize: 12,
+                                        color: "rgba(255,255,255,0.62)",
+                                        lineHeight: 1.4,
+                                    }}
+                                >
+                                    AI-ul folosește promptul, referința și setările
+                                    selectate. Nu închide pagina.
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {overlayUrl && (
                         <>
                             <div
@@ -720,12 +839,21 @@ export default function Page() {
                 </div>
 
                 <div className="aztec-preview-footer">
-                    <span>
-                        Click poziție: X {posX.toFixed(1)}%
-                    </span>
+                    <span>Click poziție: X {posX.toFixed(1)}%</span>
                     <span>Y {posY.toFixed(1)}%</span>
                 </div>
             </section>
+
+            <style jsx global>{`
+                @keyframes spin {
+                    from {
+                        rotate: 0deg;
+                    }
+                    to {
+                        rotate: 360deg;
+                    }
+                }
+            `}</style>
         </div>
     );
 }
