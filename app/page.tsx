@@ -89,28 +89,33 @@ function cleanUserPrompt(value: string) {
         .trim();
 }
 
-function getShadowStyle(placementMode: PlacementMode, posX: number, posY: number, overlayScale: number) {
+function getShadowStyle(
+    placementMode: PlacementMode,
+    posX: number,
+    posY: number,
+    overlayScale: number
+) {
     if (placementMode === "Pe fațadă") {
         return {
             left: `${posX + 2}%`,
-            top: `${posY + 2}%`,
-            width: `${overlayScale * 0.9}%`,
-            height: `${overlayScale * 0.55}%`,
-            transform: "translate(-50%, -50%) rotate(0deg)",
+            top: `${posY - overlayScale * 0.28}%`,
+            width: `${overlayScale * 0.88}%`,
+            height: `${overlayScale * 0.52}%`,
+            transform: "translate(-50%, -50%)",
             background:
                 "radial-gradient(ellipse at center, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.16) 42%, rgba(0,0,0,0.04) 68%, rgba(0,0,0,0) 78%)",
             filter: "blur(12px)",
-            opacity: 0.75,
+            opacity: 0.72,
         };
     }
 
     if (placementMode === "Suspendat") {
         return {
             left: `${posX}%`,
-            top: `${posY + overlayScale * 0.34}%`,
+            top: `${posY + overlayScale * 0.08}%`,
             width: `${overlayScale * 0.7}%`,
             height: `${overlayScale * 0.11}%`,
-            transform: "translate(-50%, -50%) rotate(0deg)",
+            transform: "translate(-50%, -50%)",
             background:
                 "radial-gradient(ellipse at center, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.09) 46%, rgba(0,0,0,0.02) 70%, rgba(0,0,0,0) 82%)",
             filter: "blur(14px)",
@@ -120,14 +125,14 @@ function getShadowStyle(placementMode: PlacementMode, posX: number, posY: number
 
     return {
         left: `${posX}%`,
-        top: `${posY + overlayScale * 0.26}%`,
+        top: `${posY}%`,
         width: `${overlayScale * 0.82}%`,
         height: `${overlayScale * 0.13}%`,
-        transform: "translate(-50%, -50%) rotate(0deg)",
+        transform: "translate(-50%, -50%)",
         background:
             "radial-gradient(ellipse at center, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.22) 42%, rgba(0,0,0,0.05) 68%, rgba(0,0,0,0) 80%)",
         filter: "blur(10px)",
-        opacity: 0.8,
+        opacity: 0.82,
     };
 }
 
@@ -737,6 +742,46 @@ export default function Page() {
                             <div className="aztec-section-line" />
 
                             <div className="aztec-slider-header">
+                                <div className="aztec-label">Poziție X</div>
+                                <div className="aztec-slider-value">
+                                    {posX.toFixed(1)}%
+                                </div>
+                            </div>
+
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={0.1}
+                                value={posX}
+                                onChange={(e) => setPosX(Number(e.target.value))}
+                            />
+
+                            <div
+                                className="aztec-slider-header"
+                                style={{ marginTop: 14 }}
+                            >
+                                <div className="aztec-label">Poziție Y</div>
+                                <div className="aztec-slider-value">
+                                    {posY.toFixed(1)}%
+                                </div>
+                            </div>
+
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={0.1}
+                                value={posY}
+                                onChange={(e) => setPosY(Number(e.target.value))}
+                            />
+
+                            <div
+                                className="aztec-slider-header"
+                                style={{ marginTop: 14 }}
+                            >
                                 <div className="aztec-label">Scală pe imagine</div>
                                 <div className="aztec-slider-value">
                                     {overlayScale}%
@@ -800,9 +845,8 @@ export default function Page() {
                             />
 
                             <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                Minim = formă 2D simplă: sferă / elipsoid /
-                                volum turtit, margine foarte curată. Textura poate
-                                rămâne fotorealistă, dar forma este simplificată.
+                                Markerul reprezintă punctul de sprijin al obiectului,
+                                nu centrul. Obiectul generat se așază cu baza pe marker.
                             </div>
                         </div>
                     </section>
@@ -944,7 +988,8 @@ export default function Page() {
                                     left: `${posX}%`,
                                     top: `${posY}%`,
                                     width: `${overlayScale}%`,
-                                    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                                    transform: `translate(-50%, -100%) rotate(${rotation}deg)`,
+                                    transformOrigin: "50% 100%",
                                     zIndex: 3,
                                     pointerEvents: "none",
                                     userSelect: "none",
