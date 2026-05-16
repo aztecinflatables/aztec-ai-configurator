@@ -13,6 +13,7 @@ type RequestBody = {
     userPrompt?: string;
     productPreset?: string;
     productType?: string;
+    placementMode?: string;
     generateMode?: GenerateMode;
     referenceControl?: {
         respectReference?: number;
@@ -88,40 +89,65 @@ function shouldUseReferenceAsInitImage(options: {
 
     const combined = `${productType || ""} ${userPrompt || ""}`;
 
-    if (shapeDetail <= 35) return false;
+    if (shapeDetail <= 50) return false;
 
-    if (isFoodSubject(combined) && respectReference < 96) return false;
+    if (isFoodSubject(combined) && respectReference < 97) return false;
 
-    if (generateMode === "replica" && respectReference >= 90 && shapeDetail >= 55) {
+    if (generateMode === "replica" && respectReference >= 90 && shapeDetail >= 65) {
         return true;
     }
 
-    if (respectReference >= 94 && shapeDetail >= 70) {
+    if (respectReference >= 95 && shapeDetail >= 80) {
         return true;
     }
 
     return false;
 }
 
-function getProductTypePrompt(productType?: string, userPrompt?: string) {
+function getProductTypePrompt(productType?: string, userPrompt?: string, shapeDetail = 35) {
     const base = normalizeText(`${productType || ""} ${userPrompt || ""}`);
 
     if (base.includes("burger") || base.includes("hamburger")) {
+        if (shapeDetail <= 10) {
+            return `
+PRODUCT TYPE: ABSTRACT SIMPLE INFLATABLE BURGER SIGN.
+
+Mandatory low-detail result:
+- Do NOT build a real burger.
+- Do NOT build visible individual ingredients.
+- Do NOT make lettuce, meat, cheese, tomato, sesame or bun as physical 3D geometry.
+- Make one simple rounded flattened ellipsoid / pillow / oval balloon.
+- The outer contour must be almost a clean oval.
+- Burger identity must come only from broad printed horizontal color bands on the PVC surface.
+- Think: a smooth inflatable oval sign printed like a burger, not a sculptural burger.
+`.trim();
+        }
+
+        if (shapeDetail <= 25) {
+            return `
+PRODUCT TYPE: SIMPLE INFLATABLE BURGER PROMOTIONAL SHAPE.
+
+Mandatory low-detail result:
+- Make the burger as one or maximum three large rounded inflatable pillow volumes.
+- Keep the outside contour clean and rounded.
+- Avoid individual ingredient geometry.
+- Use broad printed PVC color bands to suggest burger layers.
+- No detailed lettuce geometry.
+- No detailed meat geometry.
+- No sesame geometry.
+`.trim();
+        }
+
         return `
 PRODUCT TYPE: GIANT INFLATABLE BURGER PROMOTIONAL REPLICA.
 
-Mandatory geometry:
-- the subject is a burger, but it must be clearly an inflatable advertising object;
-- simplified rounded bun volumes;
-- simplified inflated cheese / lettuce / patty layers;
-- all layers must be soft, rounded, air-filled PVC volumes;
-- avoid realistic edible food construction;
-- no wet food material;
-- no detailed meat surface;
-- no detailed lettuce leaf edges;
-- no real sesame seed texture as geometry;
-- if sesame seeds appear, they must be simple printed dots on the PVC bun;
-- stable giant promotional inflatable, suitable for rooftop or event placement.
+Mandatory rules:
+- The subject is a burger, but the output must be a commercial inflatable object.
+- It must not look like edible food photography.
+- It must not have real food geometry.
+- Burger identity should come from broad PVC color zones and inflated simplified forms.
+- Use air-filled soft volumes and a clean rounded silhouette.
+- The surface texture may be photorealistic PVC print, but geometry must remain inflatable.
 `.trim();
     }
 
@@ -217,7 +243,7 @@ GENERATION MODE: CONTROLLED INFLATABLE REPLICA.
 
 Rules:
 - preserve the requested subject;
-- preserve reference shape when a reference is provided and the detail slider allows it;
+- preserve reference shape only when the detail slider is high enough;
 - convert the result into a real commercial inflatable object;
 - do not generate ordinary real objects;
 - do not generate scenery;
@@ -288,7 +314,7 @@ Use it as product design reference only.`;
 
         if (respectShape) {
             prompt += `
-- preserve the recognizable shape and silhouette logic from the reference;`;
+- preserve the recognizable subject identity and silhouette logic from the reference;`;
         }
 
         if (respectProportions) {
@@ -306,23 +332,30 @@ Use it as product design reference only.`;
 - preserve branding placement only if clearly visible; do not invent random text;`;
         }
 
-        if (shapeDetail <= 15) {
+        if (shapeDetail <= 10) {
             prompt += `
-- aggressively simplify the reference into only the largest primitive inflated volumes;
-- remove almost all secondary geometry;
-- preserve only the big silhouette and major color zones;
-- texture may remain photorealistic, but geometry must stay very simple and rounded;`;
-        } else if (shapeDetail <= 35) {
+- override the reference geometry almost completely;
+- keep only a very broad subject identity;
+- convert the object into a smooth, flattened, rounded ellipsoid / oval pillow;
+- physical reference details must disappear;
+- reference colors may become broad printed bands on the surface;
+- the outer 2D contour must be extremely simple and clean;`;
+        } else if (shapeDetail <= 25) {
+            prompt += `
+- simplify the reference into one or a few large rounded inflatable masses;
+- preserve only the main silhouette and major color zones;
+- remove small physical details completely;
+- convert small details into flat printed graphics;`;
+        } else if (shapeDetail <= 45) {
             prompt += `
 - simplify the reference into clean large inflatable volumes;
-- preserve only main recognizable forms;
-- remove small and medium geometry;
+- preserve main recognizable forms;
 - convert small details into printed graphics, not 3D relief;`;
-        } else if (shapeDetail <= 60) {
+        } else if (shapeDetail <= 70) {
             prompt += `
 - preserve main recognizable forms and some medium details;
 - simplify small details into PVC print or broad shapes;`;
-        } else if (shapeDetail <= 85) {
+        } else if (shapeDetail <= 90) {
             prompt += `
 - preserve most of the reference form while converting details into PVC panels and printed graphics;`;
         } else {
@@ -382,6 +415,7 @@ Soft internal scattering, milky semi-translucent air-filled surface.
 MATERIAL:
 Translucent internally illuminated inflatable PVC.
 Soft internal LED glow through the material.
+The object should visibly glow from inside.
 `.trim();
     }
 
@@ -399,45 +433,48 @@ Realistic commercial inflatable PVC.
 `.trim();
 }
 
-function getLightingPrompt(lighting: string) {
+function getLightingPrompt(lighting: string, material: string) {
     if (lighting === "Noapte") {
         return `
 LIGHTING:
-Night-compatible object lighting.
-Dark-scene compatible shading.
-Controlled specular highlights.
-If the material is translucent or LED interior, add soft internal glow.
-Do not use daylight shadows.
-Do not create a sunny look.
-The object should visually fit a nighttime placement.
+The object itself must be rendered for NIGHT COMPOSITING.
+Use dark-environment compatible shading.
+Use darker ambient exposure.
+Use stronger rim highlights and controlled specular reflections.
+If material is LED interior or translucent, make it visibly softly illuminated from inside.
+Do not use daylight exposure.
+Do not use sunny shadows.
+Do not create a bright daytime product render.
 `.trim();
     }
 
     if (lighting === "Golden hour") {
         return `
 LIGHTING:
-Warm golden-hour object lighting.
-Amber highlights.
-Soft warm directional light.
-Subtle long-shadow direction.
-Commercial outdoor evening mood.
+The object itself must be rendered for GOLDEN HOUR COMPOSITING.
+Use warm amber highlights.
+Use a warm low sun direction.
+Use soft evening reflections.
+Do not use neutral studio lighting.
+Do not use cold daylight.
 `.trim();
     }
 
     if (lighting === "Interior") {
         return `
 LIGHTING:
-Interior-compatible object lighting.
-Soft controlled indoor reflections.
-Subdued shadows.
-No outdoor sunlight.
+The object itself must be rendered for INTERIOR COMPOSITING.
+Use soft indoor reflections.
+Use controlled ambient lighting.
+No outdoor sun.
+No sky reflection.
 `.trim();
     }
 
     return `
 LIGHTING:
-Daylight-compatible object lighting.
-Natural outdoor daylight.
+The object itself must be rendered for DAYLIGHT COMPOSITING.
+Use natural outdoor daylight.
 Clean neutral exposure.
 Soft realistic object shading.
 No night glow.
@@ -446,24 +483,65 @@ No dark night exposure.
 }
 
 function getShapeDetailPrompt(shapeDetail: number) {
-    if (shapeDetail <= 10) {
+    if (shapeDetail <= 5) {
+        return `
+FORM COMPLEXITY:
+ABSOLUTE MINIMUM DETAIL.
+
+This instruction is stronger than the subject description.
+The generated object must look like a simple inflatable advertising balloon with printed texture.
+
+Required silhouette:
+- one single flattened ellipsoid / oval pillow / capsule-like balloon;
+- clean smooth continuous outer edge;
+- simple 2D-readable silhouette;
+- no ingredient-shaped contour;
+- no separate visible layers as 3D geometry;
+- no protrusions;
+- no cuts;
+- no jagged edges;
+- no small elements;
+- no raised details.
+
+For a burger:
+- create a single smooth rounded squashed oval balloon;
+- print broad horizontal color bands on it to suggest bun / filling / bun;
+- do not model lettuce;
+- do not model patty;
+- do not model cheese;
+- do not model sesame;
+- do not model tomato;
+- do not stack layers;
+- the object should read like a burger-themed oval inflatable sign, not a burger model.
+
+TEXTURE:
+Photorealistic printed PVC texture is allowed.
+Photorealistic geometric detail is forbidden.
+
+PVC FEEL:
+Very subtle PVC shine.
+Almost no wrinkles.
+No seams except optional barely visible perimeter seam.
+`.trim();
+    }
+
+    if (shapeDetail <= 15) {
         return `
 FORM COMPLEXITY:
 ULTRA SIMPLE INFLATABLE SHAPE.
-This is the most important instruction.
-Build the object from only a few large rounded primitive inflatable volumes.
-Use smooth blobs, cylinders, torus-like tubes, spheres, capsules and rounded pillow forms.
+
+Build the object from one to three large rounded primitive inflatable volumes.
+Use smooth blobs, ellipsoids, capsules and rounded pillow forms.
 The outer silhouette must be simple, clean and rounded.
-No jagged edges.
 No thin geometry.
 No tiny protrusions.
-No complex cutouts.
 No detailed relief.
-No many layers.
-No small physical details.
-No high-frequency geometry.
 All small details must become flat printed color/texture on the PVC surface.
-For a burger: make it like a simplified inflatable cartoon burger made of 4-5 big rounded air-filled layers, not a realistic burger.
+
+For a burger:
+- use a squashed rounded bun-like ellipsoid;
+- broad printed color bands may suggest ingredients;
+- no physical lettuce leaves, detailed meat or real sesame geometry.
 
 TEXTURE:
 Texture may still be photorealistic as printed PVC color/material.
@@ -478,10 +556,11 @@ No rough food texture.
 `.trim();
     }
 
-    if (shapeDetail <= 25) {
+    if (shapeDetail <= 30) {
         return `
 FORM COMPLEXITY:
 VERY SIMPLE INFLATABLE FORM.
+
 Use large primitive inflated shapes.
 Clear readable silhouette.
 Very few geometry parts.
@@ -499,10 +578,11 @@ No complex surface relief.
 `.trim();
     }
 
-    if (shapeDetail <= 45) {
+    if (shapeDetail <= 50) {
         return `
 FORM COMPLEXITY:
 SIMPLE COMMERCIAL INFLATABLE FORM.
+
 Use large rounded inflated volumes.
 Preserve subject identity, but simplify secondary details.
 Small details should become printed graphics or simplified soft PVC forms.
@@ -517,10 +597,11 @@ No deep folds.
 `.trim();
     }
 
-    if (shapeDetail <= 70) {
+    if (shapeDetail <= 75) {
         return `
 FORM COMPLEXITY:
 BALANCED INFLATABLE FORM.
+
 Preserve recognizable subject proportions and medium-size details.
 Convert complex details into fabricable PVC panel logic.
 Keep the shape clean and stable.
@@ -537,6 +618,7 @@ Subtle PVC tension, mild seam definition, no excessive fabric folding.
         return `
 FORM COMPLEXITY:
 DETAILED INFLATABLE FORM.
+
 Preserve most important silhouette details and reference features.
 Use welded PVC panel logic for detail.
 Keep fabricability and stable air-filled construction.
@@ -553,6 +635,7 @@ Do not create damaged or deflated wrinkles.
     return `
 FORM COMPLEXITY:
 VERY DETAILED INFLATABLE REPLICA.
+
 Preserve the reference shape closely where possible.
 Keep the object manufacturable as PVC inflatable panels.
 Complex details should still be simplified into inflatable construction or printed surface graphics.
@@ -582,6 +665,56 @@ Rules:
 - Respect the height / width / length ratio in the generated object.
 - These are product dimensions, not background dimensions.
 - Frontend handles final placement and scale over the photo.
+`.trim();
+}
+
+function getPlacementPrompt(placementMode?: string) {
+    if (placementMode === "Pe acoperiș") {
+        return `
+PLACEMENT INTENT:
+The object will be composited on a roof.
+Generate it with a clear bottom contact tangent suitable for rooftop placement.
+Do not include the roof.
+Do not include the building.
+`.trim();
+    }
+
+    if (placementMode === "Pe sol") {
+        return `
+PLACEMENT INTENT:
+The object will be composited on the ground.
+Generate it with a clear bottom contact tangent.
+Do not include the ground.
+`.trim();
+    }
+
+    if (placementMode === "Pe fațadă") {
+        return `
+PLACEMENT INTENT:
+The object will be composited on a vertical facade.
+Generate it as if mounted close to a wall, but without wall or background.
+`.trim();
+    }
+
+    if (placementMode === "Suspendat") {
+        return `
+PLACEMENT INTENT:
+The object will be composited as suspended / floating.
+Generate clean object only, without cables unless explicitly requested.
+`.trim();
+    }
+
+    if (placementMode === "În interior") {
+        return `
+PLACEMENT INTENT:
+The object will be composited inside a space.
+Generate clean object only, without room or background.
+`.trim();
+    }
+
+    return `
+PLACEMENT INTENT:
+Generate clean object only, no background.
 `.trim();
 }
 
@@ -654,7 +787,41 @@ complex cutouts,
 high frequency geometry
 `.trim();
 
-    if (shapeDetail <= 10) {
+    if (shapeDetail <= 5) {
+        negative += `,
+detailed burger,
+burger model,
+stacked burger,
+stacked layers,
+separate bun,
+separate lettuce,
+separate patty,
+separate cheese,
+separate tomato,
+lettuce leaves,
+detailed lettuce,
+detailed meat,
+burger patty relief,
+sesame seed geometry,
+cheese triangles protruding,
+ingredient geometry,
+many parts,
+many layers,
+complex object,
+complex shape,
+small geometry,
+tiny details,
+fine detail,
+jagged food outline,
+realistic food shape,
+bumpy surface,
+rough surface,
+seam-heavy construction,
+wrinkled fabric,
+irregular silhouette,
+sculptural burger,
+3d food replica`;
+    } else if (shapeDetail <= 15) {
         negative += `,
 detailed geometry,
 small geometry,
@@ -675,7 +842,7 @@ irregular silhouette,
 jagged food outline,
 tiny details,
 fine detail`;
-    } else if (shapeDetail <= 25) {
+    } else if (shapeDetail <= 30) {
         negative += `,
 many small details,
 complex noisy surface,
@@ -685,7 +852,7 @@ tiny parts,
 complex topology,
 realistic food geometry,
 jagged food edge`;
-    } else if (shapeDetail <= 45) {
+    } else if (shapeDetail <= 50) {
         negative += `,
 overdetailed geometry,
 tiny parts,
@@ -698,7 +865,8 @@ noisy silhouette`;
         negative += `,
 daylight,
 sunny shadows,
-bright noon lighting`;
+bright noon lighting,
+daytime product render`;
     }
 
     if (lighting === "Zi") {
@@ -789,6 +957,7 @@ export async function POST(req: Request) {
             userPrompt = "",
             productPreset = "",
             productType = "Custom",
+            placementMode = "Pe sol",
             generateMode = "photo",
             referenceControl,
             dimensions,
@@ -859,7 +1028,9 @@ ${prompt}
 PRODUCT PRESET:
 ${productPreset}
 
-${getProductTypePrompt(productType, userPrompt)}
+${getProductTypePrompt(productType, userPrompt, shapeDetailValue)}
+
+${getPlacementPrompt(placementMode)}
 
 ${getModePrompt(generateMode, respectReference)}
 
@@ -881,7 +1052,7 @@ ${getDimensionsPrompt(dimensions)}
 
 ${getMaterialPrompt(material)}
 
-${getLightingPrompt(lighting)}
+${getLightingPrompt(lighting, material)}
 
 ${getShapeDetailPrompt(shapeDetailValue)}
 
@@ -901,7 +1072,7 @@ ABSOLUTE OUTPUT:
 - no people;
 - no props;
 - no real food;
-- if subject is food, create a simplified inflatable food replica;
+- if subject is food and detail is low, create a flattened ellipsoid printed as that food;
 - clean edges suitable for compositing over a photo.
 `.trim();
 
@@ -1022,6 +1193,7 @@ ABSOLUTE OUTPUT:
             debug: {
                 productType,
                 userPrompt,
+                placementMode,
                 generateMode,
                 respectReference,
                 material,
