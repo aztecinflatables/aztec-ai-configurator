@@ -89,6 +89,48 @@ function cleanUserPrompt(value: string) {
         .trim();
 }
 
+function getShadowStyle(placementMode: PlacementMode, posX: number, posY: number, overlayScale: number) {
+    if (placementMode === "Pe fațadă") {
+        return {
+            left: `${posX + 2}%`,
+            top: `${posY + 2}%`,
+            width: `${overlayScale * 0.9}%`,
+            height: `${overlayScale * 0.55}%`,
+            transform: "translate(-50%, -50%) rotate(0deg)",
+            background:
+                "radial-gradient(ellipse at center, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.16) 42%, rgba(0,0,0,0.04) 68%, rgba(0,0,0,0) 78%)",
+            filter: "blur(12px)",
+            opacity: 0.75,
+        };
+    }
+
+    if (placementMode === "Suspendat") {
+        return {
+            left: `${posX}%`,
+            top: `${posY + overlayScale * 0.34}%`,
+            width: `${overlayScale * 0.7}%`,
+            height: `${overlayScale * 0.11}%`,
+            transform: "translate(-50%, -50%) rotate(0deg)",
+            background:
+                "radial-gradient(ellipse at center, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.09) 46%, rgba(0,0,0,0.02) 70%, rgba(0,0,0,0) 82%)",
+            filter: "blur(14px)",
+            opacity: 0.55,
+        };
+    }
+
+    return {
+        left: `${posX}%`,
+        top: `${posY + overlayScale * 0.26}%`,
+        width: `${overlayScale * 0.82}%`,
+        height: `${overlayScale * 0.13}%`,
+        transform: "translate(-50%, -50%) rotate(0deg)",
+        background:
+            "radial-gradient(ellipse at center, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.22) 42%, rgba(0,0,0,0.05) 68%, rgba(0,0,0,0) 80%)",
+        filter: "blur(10px)",
+        opacity: 0.8,
+    };
+}
+
 export default function Page() {
     const [sceneImage, setSceneImage] = useState<string | null>(null);
     const [sceneBase64, setSceneBase64] = useState<string | null>(null);
@@ -130,9 +172,9 @@ export default function Page() {
 
     const previewRef = useRef<HTMLDivElement | null>(null);
 
-    const userVisiblePrompt = userPrompt;
     const subjectPrompt = cleanUserPrompt(userPrompt) || userPrompt.trim();
     const fullPrompt = `${subjectPrompt}. ${PRODUCT_PRESETS[selectedProductType]}`;
+    const shadowStyle = getShadowStyle(placementMode, posX, posY, overlayScale);
 
     const fileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -376,7 +418,7 @@ export default function Page() {
                             <div className="aztec-label">Descriere scurtă</div>
                             <textarea
                                 className="aztec-textarea"
-                                value={userVisiblePrompt}
+                                value={userPrompt}
                                 onChange={(e) => {
                                     setUserPrompt(e.target.value);
                                     setOverlayUrl(null);
@@ -886,10 +928,10 @@ export default function Page() {
                             <div
                                 className="aztec-overlay-shadow"
                                 style={{
-                                    left: `${posX}%`,
-                                    top: `${posY}%`,
-                                    width: `${overlayScale * 0.78}%`,
-                                    height: `${overlayScale * 0.12}%`,
+                                    position: "absolute",
+                                    zIndex: 2,
+                                    pointerEvents: "none",
+                                    ...shadowStyle,
                                 }}
                             />
 
@@ -898,10 +940,14 @@ export default function Page() {
                                 src={overlayUrl}
                                 alt="Gonflabil generat"
                                 style={{
+                                    position: "absolute",
                                     left: `${posX}%`,
                                     top: `${posY}%`,
                                     width: `${overlayScale}%`,
-                                    rotate: `${rotation}deg`,
+                                    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+                                    zIndex: 3,
+                                    pointerEvents: "none",
+                                    userSelect: "none",
                                 }}
                             />
                         </>
