@@ -36,33 +36,60 @@ const PRODUCT_PRESETS: Record<ProductType, string> = {
         "Obiect gonflabil personalizat, realist, fabricabil, cu formă stabilă, material PVC profesional și proporții comerciale.",
 };
 
+function getDerivedDimensions(productType: ProductType, heightM: number) {
+    if (productType === "Arcadă") {
+        return { widthM: heightM * 1.25, depthM: heightM * 0.25 };
+    }
+
+    if (productType === "Mascotă") {
+        return { widthM: heightM * 0.9, depthM: heightM * 0.55 };
+    }
+
+    if (productType === "Cupolă") {
+        return { widthM: heightM * 1.8, depthM: heightM * 1.8 };
+    }
+
+    if (productType === "Cort") {
+        return { widthM: heightM * 1.5, depthM: heightM * 1.5 };
+    }
+
+    if (productType === "Tunel") {
+        return { widthM: heightM * 1.1, depthM: heightM * 2.2 };
+    }
+
+    if (productType === "Sticlă") {
+        return { widthM: heightM * 0.35, depthM: heightM * 0.35 };
+    }
+
+    return { widthM: heightM, depthM: heightM * 0.5 };
+}
+
 export default function Page() {
     const [sceneImage, setSceneImage] = useState<string | null>(null);
     const [sceneBase64, setSceneBase64] = useState<string | null>(null);
+    const [sceneNatural, setSceneNatural] = useState({ width: 1, height: 1 });
 
     const [refImage, setRefImage] = useState<string | null>(null);
     const [textureImage, setTextureImage] = useState<string | null>(null);
 
-    const [userPrompt, setUserPrompt] = useState("burger");
+    const [userPrompt, setUserPrompt] = useState("burger peste clădire, pe acoperiș");
     const [selectedProductType, setSelectedProductType] =
         useState<ProductType>("Mascotă");
 
-    const [generateMode, setGenerateMode] = useState<GenerateMode>("photo");
+    const [generateMode, setGenerateMode] = useState<GenerateMode>("replica");
 
-    const [respectReference, setRespectReference] = useState(65);
+    const [respectReference, setRespectReference] = useState(85);
     const [respectShape, setRespectShape] = useState(true);
     const [respectTexture, setRespectTexture] = useState(true);
     const [respectProportions, setRespectProportions] = useState(true);
     const [respectBranding, setRespectBranding] = useState(true);
 
-    const [widthM, setWidthM] = useState(3);
     const [heightM, setHeightM] = useState(3);
-    const [depthM, setDepthM] = useState(1.2);
-    const [autoScale, setAutoScale] = useState(false);
+    const derived = getDerivedDimensions(selectedProductType, heightM);
 
     const [material, setMaterial] = useState<MaterialMode>("PVC lucios");
     const [lighting, setLighting] = useState("Zi");
-    const [realism, setRealism] = useState(55);
+    const [realism, setRealism] = useState(45);
 
     const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -128,13 +155,63 @@ export default function Page() {
         setError(null);
     };
 
+    const getContainedImageRect = () => {
+        const stage = previewRef.current;
+        if (!stage) return null;
+
+        const rect = stage.getBoundingClientRect();
+        const stageRatio = rect.width / rect.height;
+        const imageRatio = sceneNatural.width / sceneNatural.height;
+
+        let renderWidth = rect.width;
+        let renderHeight = rect.height;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (imageRatio > stageRatio) {
+            renderWidth = rect.width;
+            renderHeight = rect.width / imageRatio;
+            offsetY = (rect.height - renderHeight) / 2;
+        } else {
+            renderHeight = rect.height;
+            renderWidth = rect.height * imageRatio;
+            offsetX = (rect.width - renderWidth) / 2;
+        }
+
+        return {
+            stageRect: rect,
+            imageLeft: rect.left + offsetX,
+            imageTop: rect.top + offsetY,
+            imageWidth: renderWidth,
+            imageHeight: renderHeight,
+        };
+    };
+
     const handlePreviewClick = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (!previewRef.current || !sceneImage || loading) return;
+        if (!previewRef.current || !sceneImage || loading || overlayUrl) return;
 
-        const rect = previewRef.current.getBoundingClientRect();
+        const imageRect = getContainedImageRect();
+        if (!imageRect) return;
 
-        const x = ((event.clientX - rect.left) / rect.width) * 100;
-        const y = ((event.clientY - rect.top) / rect.height) * 100;
+        const clampedClientX = Math.max(
+            imageRect.imageLeft,
+            Math.min(imageRect.imageLeft + imageRect.imageWidth, event.clientX)
+        );
+
+        const clampedClientY = Math.max(
+            imageRect.imageTop,
+            Math.min(imageRect.imageTop + imageRect.imageHeight, event.clientY)
+        );
+
+        const x =
+            ((clampedClientX - imageRect.stageRect.left) /
+                imageRect.stageRect.width) *
+            100;
+
+        const y =
+            ((clampedClientY - imageRect.stageRect.top) /
+                imageRect.stageRect.height) *
+            100;
 
         setPosX(Math.max(0, Math.min(100, x)));
         setPosY(Math.max(0, Math.min(100, y)));
@@ -173,10 +250,10 @@ export default function Page() {
                         respectBranding,
                     },
                     dimensions: {
-                        widthM,
+                        widthM: derived.widthM,
                         heightM,
-                        depthM,
-                        autoScale,
+                        depthM: derived.depthM,
+                        autoScale: false,
                     },
                     material,
                     lighting,
@@ -238,10 +315,6 @@ export default function Page() {
                                 onChange={handleSceneUpload}
                             />
 
-                            <div className="aztec-help">
-                                Fotografia spațiului unde va fi amplasat gonflabilul.
-                            </div>
-
                             <div className="aztec-label" style={{ marginTop: 14 }}>
                                 Imagine referință produs
                             </div>
@@ -252,11 +325,6 @@ export default function Page() {
                                 onChange={handleRefUpload}
                             />
 
-                            <div className="aztec-help">
-                                Randare, poză, schiță sau produs existent. Pentru replică,
-                                aceasta este imaginea principală.
-                            </div>
-
                             <div className="aztec-label" style={{ marginTop: 14 }}>
                                 Logo / print / textură custom
                             </div>
@@ -266,11 +334,6 @@ export default function Page() {
                                 accept="image/png,image/jpeg,image/webp"
                                 onChange={handleTextureUpload}
                             />
-
-                            <div className="aztec-help">
-                                Opțional. Folosit pentru aplicarea brandingului sau a unei
-                                texturi noi.
-                            </div>
                         </div>
                     </section>
 
@@ -315,7 +378,10 @@ export default function Page() {
                                         <button
                                             key={chip}
                                             type="button"
-                                            onClick={() => setSelectedProductType(chip)}
+                                            onClick={() => {
+                                                setSelectedProductType(chip);
+                                                setOverlayUrl(null);
+                                            }}
                                             style={{
                                                 border: active
                                                     ? "1px solid rgba(255,106,0,0.95)"
@@ -340,13 +406,7 @@ export default function Page() {
                                 })}
                             </div>
 
-                            <div
-                                className="aztec-info-box"
-                                style={{
-                                    marginTop: 14,
-                                    opacity: 0.88,
-                                }}
-                            >
+                            <div className="aztec-info-box" style={{ marginTop: 14 }}>
                                 Prompt complet trimis către AI:
                                 <br />
                                 <strong style={{ color: "#FFFFFF" }}>
@@ -498,85 +558,34 @@ export default function Page() {
                         <div className="aztec-section-content">
                             <div className="aztec-section-line" />
 
-                            <div className="aztec-slider-block">
-                                <div>
-                                    <div className="aztec-slider-header">
-                                        <div className="aztec-label">Lățime</div>
-                                        <div className="aztec-slider-value">
-                                            {widthM.toFixed(1)} m
-                                        </div>
-                                    </div>
-                                    <input
-                                        className="aztec-slider"
-                                        type="range"
-                                        min={0.5}
-                                        max={12}
-                                        step={0.1}
-                                        value={widthM}
-                                        onChange={(e) =>
-                                            setWidthM(Number(e.target.value))
-                                        }
-                                    />
-                                </div>
-
-                                <div>
-                                    <div className="aztec-slider-header">
-                                        <div className="aztec-label">Înălțime</div>
-                                        <div className="aztec-slider-value">
-                                            {heightM.toFixed(1)} m
-                                        </div>
-                                    </div>
-                                    <input
-                                        className="aztec-slider"
-                                        type="range"
-                                        min={0.5}
-                                        max={12}
-                                        step={0.1}
-                                        value={heightM}
-                                        onChange={(e) =>
-                                            setHeightM(Number(e.target.value))
-                                        }
-                                    />
-                                </div>
-
-                                <div>
-                                    <div className="aztec-slider-header">
-                                        <div className="aztec-label">Adâncime</div>
-                                        <div className="aztec-slider-value">
-                                            {depthM.toFixed(1)} m
-                                        </div>
-                                    </div>
-                                    <input
-                                        className="aztec-slider"
-                                        type="range"
-                                        min={0.2}
-                                        max={5}
-                                        step={0.1}
-                                        value={depthM}
-                                        onChange={(e) =>
-                                            setDepthM(Number(e.target.value))
-                                        }
-                                    />
+                            <div className="aztec-slider-header">
+                                <div className="aztec-label">Înălțime țintă</div>
+                                <div className="aztec-slider-value">
+                                    {heightM.toFixed(1)} m
                                 </div>
                             </div>
 
-                            <label
-                                className="aztec-checkbox-row"
-                                style={{ marginTop: 14 }}
-                            >
-                                <input
-                                    className="aztec-checkbox"
-                                    type="checkbox"
-                                    checked={autoScale}
-                                    onChange={(e) => setAutoScale(e.target.checked)}
-                                />
-                                Detectează automat scara din scenă
-                            </label>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={0.5}
+                                max={12}
+                                step={0.1}
+                                value={heightM}
+                                onChange={(e) => {
+                                    setHeightM(Number(e.target.value));
+                                    setOverlayUrl(null);
+                                }}
+                            />
 
                             <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                Recomandare: pentru rezultate controlabile, lasă
-                                Auto-scale dezactivat și setează manual dimensiunea
-                                aproximativă.
+                                Lățime și adâncime estimate automat după tip:
+                                <br />
+                                <strong style={{ color: "#FFFFFF" }}>
+                                    {derived.widthM.toFixed(1)} ×{" "}
+                                    {heightM.toFixed(1)} ×{" "}
+                                    {derived.depthM.toFixed(1)} m
+                                </strong>
                             </div>
                         </div>
                     </section>
@@ -593,9 +602,10 @@ export default function Page() {
                             <select
                                 className="aztec-select"
                                 value={material}
-                                onChange={(e) =>
-                                    setMaterial(e.target.value as MaterialMode)
-                                }
+                                onChange={(e) => {
+                                    setMaterial(e.target.value as MaterialMode);
+                                    setOverlayUrl(null);
+                                }}
                             >
                                 <option>PVC lucios</option>
                                 <option>PVC mat</option>
@@ -610,7 +620,10 @@ export default function Page() {
                             <select
                                 className="aztec-select"
                                 value={lighting}
-                                onChange={(e) => setLighting(e.target.value)}
+                                onChange={(e) => {
+                                    setLighting(e.target.value);
+                                    setOverlayUrl(null);
+                                }}
                             >
                                 <option>Zi</option>
                                 <option>Golden hour</option>
@@ -634,6 +647,7 @@ export default function Page() {
                                     {overlayScale}%
                                 </div>
                             </div>
+
                             <input
                                 className="aztec-slider"
                                 type="range"
@@ -654,6 +668,7 @@ export default function Page() {
                                     {rotation}°
                                 </div>
                             </div>
+
                             <input
                                 className="aztec-slider"
                                 type="range"
@@ -674,19 +689,18 @@ export default function Page() {
                                 </div>
                                 <div className="aztec-slider-value">{realism}%</div>
                             </div>
+
                             <input
                                 className="aztec-slider"
                                 type="range"
                                 min={0}
                                 max={100}
                                 value={realism}
-                                onChange={(e) => setRealism(Number(e.target.value))}
+                                onChange={(e) => {
+                                    setRealism(Number(e.target.value));
+                                    setOverlayUrl(null);
+                                }}
                             />
-
-                            <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                Recomandare: 35–60 pentru produse curate. Peste 75
-                                poate adăuga prea multe deformări/cute.
-                            </div>
                         </div>
                     </section>
 
@@ -734,6 +748,12 @@ export default function Page() {
                             className="aztec-preview-image"
                             src={sceneImage}
                             alt="Scenă"
+                            onLoad={(event) => {
+                                setSceneNatural({
+                                    width: event.currentTarget.naturalWidth,
+                                    height: event.currentTarget.naturalHeight,
+                                });
+                            }}
                         />
                     )}
 
@@ -794,8 +814,7 @@ export default function Page() {
                                         lineHeight: 1.4,
                                     }}
                                 >
-                                    AI-ul folosește promptul, referința și setările
-                                    selectate. Nu închide pagina.
+                                    Se folosește poziția marcată. Nu închide pagina.
                                 </div>
                             </div>
                         </div>
@@ -827,7 +846,7 @@ export default function Page() {
                         </>
                     )}
 
-                    {sceneImage && (
+                    {sceneImage && !overlayUrl && !loading && (
                         <div
                             className="aztec-position-dot"
                             style={{
