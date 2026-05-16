@@ -19,6 +19,13 @@ type ProductType =
     | "Sticlă"
     | "Custom";
 
+type PlacementMode =
+    | "Pe sol"
+    | "Pe acoperiș"
+    | "Pe fațadă"
+    | "Suspendat"
+    | "În interior";
+
 const PRODUCT_PRESETS: Record<ProductType, string> = {
     Arcadă:
         "Arcadă gonflabilă publicitară premium, cu două picioare verticale stabile și traversă superioară rotunjită, proporții realiste, PVC lucios, construcție fabricabilă.",
@@ -64,6 +71,24 @@ function getDerivedDimensions(productType: ProductType, heightM: number) {
     return { widthM: heightM, depthM: heightM * 0.5 };
 }
 
+function cleanUserPrompt(value: string) {
+    return value
+        .replace(/pe acoperiș/gi, "")
+        .replace(/pe acoperis/gi, "")
+        .replace(/peste clădire/gi, "")
+        .replace(/peste cladire/gi, "")
+        .replace(/pe clădire/gi, "")
+        .replace(/pe cladire/gi, "")
+        .replace(/pe sol/gi, "")
+        .replace(/pe fațadă/gi, "")
+        .replace(/pe fatada/gi, "")
+        .replace(/suspendat/gi, "")
+        .replace(/\s+/g, " ")
+        .replace(/\s+,/g, ",")
+        .replace(/,+/g, ",")
+        .trim();
+}
+
 export default function Page() {
     const [sceneImage, setSceneImage] = useState<string | null>(null);
     const [sceneBase64, setSceneBase64] = useState<string | null>(null);
@@ -72,9 +97,11 @@ export default function Page() {
     const [refImage, setRefImage] = useState<string | null>(null);
     const [textureImage, setTextureImage] = useState<string | null>(null);
 
-    const [userPrompt, setUserPrompt] = useState("burger peste clădire, pe acoperiș");
+    const [userPrompt, setUserPrompt] = useState("burger");
     const [selectedProductType, setSelectedProductType] =
         useState<ProductType>("Mascotă");
+    const [placementMode, setPlacementMode] =
+        useState<PlacementMode>("Pe acoperiș");
 
     const [generateMode, setGenerateMode] = useState<GenerateMode>("replica");
 
@@ -90,7 +117,7 @@ export default function Page() {
     const [material, setMaterial] = useState<MaterialMode>("PVC lucios");
     const [lighting, setLighting] = useState("Zi");
 
-    const [shapeDetail, setShapeDetail] = useState(35);
+    const [shapeDetail, setShapeDetail] = useState(5);
 
     const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -103,7 +130,9 @@ export default function Page() {
 
     const previewRef = useRef<HTMLDivElement | null>(null);
 
-    const fullPrompt = `${userPrompt.trim()}. ${PRODUCT_PRESETS[selectedProductType]}`;
+    const userVisiblePrompt = userPrompt;
+    const subjectPrompt = cleanUserPrompt(userPrompt) || userPrompt.trim();
+    const fullPrompt = `${subjectPrompt}. ${PRODUCT_PRESETS[selectedProductType]}`;
 
     const fileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -236,9 +265,10 @@ export default function Page() {
                     refImage,
                     textureImage,
                     prompt: fullPrompt,
-                    userPrompt,
+                    userPrompt: subjectPrompt,
                     productPreset: PRODUCT_PRESETS[selectedProductType],
                     productType: selectedProductType,
+                    placementMode,
                     generateMode,
                     referenceControl: {
                         respectReference,
@@ -346,8 +376,11 @@ export default function Page() {
                             <div className="aztec-label">Descriere scurtă</div>
                             <textarea
                                 className="aztec-textarea"
-                                value={userPrompt}
-                                onChange={(e) => setUserPrompt(e.target.value)}
+                                value={userVisiblePrompt}
+                                onChange={(e) => {
+                                    setUserPrompt(e.target.value);
+                                    setOverlayUrl(null);
+                                }}
                                 placeholder="Ex: burger, arcadă AZTEC, mascotă urs, sticlă de suc..."
                             />
 
@@ -404,11 +437,30 @@ export default function Page() {
                                 })}
                             </div>
 
+                            <div className="aztec-label" style={{ marginTop: 14 }}>
+                                Poziționare
+                            </div>
+
+                            <select
+                                className="aztec-select"
+                                value={placementMode}
+                                onChange={(e) => {
+                                    setPlacementMode(e.target.value as PlacementMode);
+                                    setOverlayUrl(null);
+                                }}
+                            >
+                                <option>Pe sol</option>
+                                <option>Pe acoperiș</option>
+                                <option>Pe fațadă</option>
+                                <option>Suspendat</option>
+                                <option>În interior</option>
+                            </select>
+
                             <div className="aztec-info-box" style={{ marginTop: 14 }}>
-                                Prompt complet trimis către AI:
+                                Text trimis de utilizator:
                                 <br />
                                 <strong style={{ color: "#FFFFFF" }}>
-                                    {fullPrompt}
+                                    {userPrompt}
                                 </strong>
                             </div>
                         </div>
@@ -706,10 +758,9 @@ export default function Page() {
                             />
 
                             <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                Minim = forme simple, volum mare, puține detalii.
-                                Maxim = formă mai apropiată de obiect / referință.
-                                Cutele rămân subtile, doar cât să se simtă materialul
-                                gonflabil.
+                                Minim = formă 2D simplă: sferă / elipsoid /
+                                volum turtit, margine foarte curată. Textura poate
+                                rămâne fotorealistă, dar forma este simplificată.
                             </div>
                         </div>
                     </section>
