@@ -10,6 +10,9 @@ type RequestBody = {
     refImage?: string | null;
     textureImage?: string | null;
     prompt?: string;
+    userPrompt?: string;
+    productPreset?: string;
+    productType?: string;
     generateMode?: GenerateMode;
     referenceControl?: {
         respectReference?: number;
@@ -27,6 +30,10 @@ type RequestBody = {
     material?: string;
     lighting?: string;
     realism?: number;
+    placement?: {
+        x?: number;
+        y?: number;
+    };
 };
 
 function base64ToBlob(base64: string, type = "image/jpeg") {
@@ -39,29 +46,31 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getModePrompt(mode: GenerateMode, respectReference: number) {
-    if (mode === "replica" || respectReference >= 80) {
+    if (mode === "replica" || respectReference >= 85) {
         return `
-STRICT REPLICA MODE.
-The reference image is the source of truth.
-Preserve the exact inflatable product geometry, silhouette, proportions, panel layout and visual identity as much as possible.
-Do not redesign the object.
-Do not reinterpret the object.
-Do not invent a different structure.
+STRICT CONTROLLED REPLICA MODE.
+The product reference image is the main source of truth.
+Preserve the same object category, same inflatable structure, same silhouette logic and same major proportions.
+Do not creatively redesign the object into a different product.
+Do not replace the requested object with a random generic object.
+If the user wrote a subject such as "burger", generate that subject as an inflatable object, not as a normal real burger.
 `.trim();
     }
 
     if (mode === "photo") {
         return `
-PHOTOREALISTIC MODE.
-Create a realistic commercial visualization while keeping the product believable and manufacturable.
-Use the reference as strong guidance, but allow minor improvements for realism and presentation.
+CONTROLLED PHOTOREALISTIC MODE.
+Create a realistic commercial visualization of the requested inflatable product.
+Keep the object manufacturable, correctly scaled and appropriate for the selected environment.
+Avoid over-designing or adding unnecessary details.
 `.trim();
     }
 
     return `
-FAST MOCKUP MODE.
-Create a clean concept mockup quickly.
-The result may be more simplified, but must still look like a professional inflatable product.
+FAST CLEAN MOCKUP MODE.
+Create a simple, clean, commercial mockup of the requested inflatable product.
+Use simplified geometry and fewer wrinkles.
+Avoid excessive folds and chaotic details.
 `.trim();
 }
 
@@ -84,191 +93,362 @@ function getReferencePrompt(options: {
         hasTextureImage,
     } = options;
 
-    const strictness =
-        respectReference >= 85
-            ? "very strict"
-            : respectReference >= 60
-              ? "strong"
-              : respectReference >= 30
-                ? "medium"
-                : "loose";
-
     let prompt = `
-Reference priority: ${respectReference}/100 (${strictness}).
+Reference strength: ${respectReference}/100.
 `.trim();
 
     if (hasRefImage) {
         prompt += `
 
-Use the reference image as the primary design source.`;
+A product reference image is provided. Use it only as a design reference for the inflatable product.`;
 
         if (respectShape) {
             prompt += `
-- Preserve the reference shape, silhouette, inflatable structure and topology.`;
+- Preserve the reference object's overall shape category, silhouette logic and inflatable construction language.`;
         }
 
         if (respectProportions) {
             prompt += `
-- Preserve the reference proportions and relative dimensions.`;
+- Preserve approximate proportions, but adjust them only if required to make the object fabricable and stable as an inflatable.`;
         }
 
         if (respectTexture) {
             prompt += `
-- Preserve the printed texture, color blocks, pattern layout and surface graphics from the reference.`;
+- Preserve the visible color arrangement, printed graphics, pattern logic and surface layout from the reference if applicable.`;
         }
 
         if (respectBranding) {
             prompt += `
-- Preserve visible branding placement and print layout from the reference image as closely as possible.`;
+- Preserve branding placement only when it is clearly visible and requested. Do not invent random logos or text.`;
         }
 
         if (respectReference >= 85) {
             prompt += `
-- Do not replace the reference object with a generic inflatable.
-- Do not simplify the object into a different design.
-- Do not change the silhouette.
-- Do not change the print layout unless required by transparency cleanup.`;
+- Do not convert the reference into a different object.
+- Do not ignore the reference.
+- Do not generate a normal non-inflatable object.
+- The final result must remain a commercial inflatable product.`;
         }
     } else {
         prompt += `
 
-No product reference image was provided. Generate from the user description and settings.`;
+No product reference image was provided. Generate strictly from the written request and selected product type.`;
     }
 
     if (hasTextureImage) {
         prompt += `
 
-A separate texture/branding image was provided.
-Apply that uploaded texture/branding to the inflatable surface while keeping the product form stable and realistic.
-If both reference and texture are provided: keep the reference shape, but prioritize the uploaded texture/branding for surface appearance.`;
+A separate texture/branding image is provided.
+Use it as surface inspiration only.
+Apply its colors or texture logic onto the inflatable surface.
+Keep the inflatable product form stable and manufacturable.`;
     }
 
     return prompt.trim();
 }
 
-function getMaterialPrompt(material: string, lighting: string) {
-    let prompt = "";
+function getProductTypePrompt(productType?: string, userPrompt?: string) {
+    const base = `${productType || ""} ${userPrompt || ""}`.toLowerCase();
 
-    if (material === "PVC lucios") {
-        prompt += `
-Material: glossy inflatable PVC, soft specular highlights, welded seams, flexible pressurized surface.`;
-    } else if (material === "PVC mat") {
-        prompt += `
-Material: matte inflatable PVC, soft diffused reflections, welded seams, professional outdoor fabric look.`;
-    } else if (material === "Alb translucid") {
-        prompt += `
-Material: white translucent inflatable PVC, subtle light diffusion, soft semi-transparent material response.`;
-    } else if (material === "LED interior") {
-        prompt += `
-Material: translucent internally illuminated inflatable PVC, visible soft glow, realistic internal LED diffusion.`;
-    } else if (material === "Outdoor heavy-duty") {
-        prompt += `
-Material: heavy-duty outdoor inflatable PVC, durable fabric texture, reinforced welded seams, robust commercial construction.`;
-    } else {
-        prompt += `
-Material: realistic commercial inflatable PVC.`;
-    }
-
-    if (lighting === "Noapte") {
-        prompt += `
-Lighting: nighttime environment compatibility, stronger highlights, believable shadows and glow where applicable.`;
-    } else if (lighting === "Golden hour") {
-        prompt += `
-Lighting: warm golden-hour commercial photography, soft long shadows, warm highlights.`;
-    } else if (lighting === "Interior") {
-        prompt += `
-Lighting: controlled indoor lighting, soft realistic shadows, product presentation look.`;
-    } else {
-        prompt += `
-Lighting: natural daylight, realistic outdoor highlights and shadows.`;
-    }
-
-    return prompt.trim();
-}
-
-function getRealismPrompt(realism: number) {
-    if (realism >= 80) {
+    if (base.includes("arcad")) {
         return `
-Inflatable realism: high.
-Show realistic welded seams, slight PVC wrinkles, air pressure tension, subtle panel deformation, soft rounded inflated edges, believable commercial fabrication details.
-The object must look manufacturable by an inflatable production company.
+Product type: inflatable arch.
+Structure requirements:
+- two stable vertical legs;
+- one rounded top bridge;
+- commercial event arch proportions;
+- stable on ground;
+- no excessive organic deformation.
 `.trim();
     }
 
-    if (realism >= 45) {
+    if (base.includes("mascot") || base.includes("mascotă")) {
         return `
-Inflatable realism: medium.
-Show clean seams, mild wrinkles and a professional product visualization style.
+Product type: inflatable mascot / inflatable character object.
+Structure requirements:
+- simplified large inflatable shape;
+- rounded volumes;
+- stable base;
+- visible inflatable seams only where useful;
+- not a normal realistic object, but an inflatable interpretation of the subject.
+`.trim();
+    }
+
+    if (base.includes("burger")) {
+        return `
+Product type: inflatable burger mascot / inflatable product replica.
+Structure requirements:
+- the subject is a burger, but it must be clearly made as an inflatable object;
+- simplified rounded burger layers;
+- smooth PVC surface;
+- fewer tiny food details;
+- no realistic food texture overload;
+- stable commercial inflatable form;
+- large event prop appearance.
+`.trim();
+    }
+
+    if (base.includes("cort") || base.includes("tent")) {
+        return `
+Product type: inflatable event tent.
+Structure requirements:
+- inflatable tube frame;
+- stable roof;
+- fabricable event tent proportions;
+- no impossible thin elements.
+`.trim();
+    }
+
+    if (base.includes("tunel")) {
+        return `
+Product type: inflatable tunnel.
+Structure requirements:
+- long inflatable tunnel;
+- rounded entrance;
+- stable base;
+- commercial sports event appearance.
+`.trim();
+    }
+
+    if (base.includes("sticl")) {
+        return `
+Product type: inflatable bottle / product replica.
+Structure requirements:
+- recognizable bottle silhouette;
+- soft inflated body;
+- simplified neck and cap;
+- stable base;
+- commercial product replica.
+`.trim();
+    }
+
+    if (base.includes("cupol")) {
+        return `
+Product type: inflatable dome.
+Structure requirements:
+- large rounded dome volume;
+- stable base perimeter;
+- clean PVC construction.
 `.trim();
     }
 
     return `
-Inflatable realism: clean CGI.
-Smooth, simple, polished commercial mockup with minimal wrinkles.
+Product type: custom commercial inflatable object.
+Structure requirements:
+- manufacturable inflatable form;
+- stable proportions;
+- rounded PVC volumes;
+- believable welded-panel construction.
+`.trim();
+}
+
+function getMaterialPrompt(material: string) {
+    if (material === "PVC lucios") {
+        return `
+Material: glossy inflatable PVC.
+Surface: clean, smooth, controlled highlights, slight seam reflections.
+Do not make it look like hard plastic or metal.
+`.trim();
+    }
+
+    if (material === "PVC mat") {
+        return `
+Material: matte inflatable PVC.
+Surface: soft diffuse reflections, professional outdoor fabric/PVC appearance.
+Do not make it glossy.
+`.trim();
+    }
+
+    if (material === "Alb translucid") {
+        return `
+Material: white translucent inflatable PVC.
+Surface: soft light diffusion, semi-translucent white material, subtle internal scattering.
+`.trim();
+    }
+
+    if (material === "LED interior") {
+        return `
+Material: translucent internally illuminated inflatable PVC.
+Surface: soft glow through the material, visible internal light diffusion, premium LED inflatable look.
+`.trim();
+    }
+
+    if (material === "Outdoor heavy-duty") {
+        return `
+Material: heavy-duty outdoor inflatable PVC.
+Surface: reinforced seams, durable commercial PVC fabric, robust event-grade construction.
+`.trim();
+    }
+
+    return `
+Material: realistic commercial inflatable PVC.
+`.trim();
+}
+
+function getLightingPrompt(lighting: string) {
+    if (lighting === "Noapte") {
+        return `
+Lighting and environment target: NIGHT.
+The object lighting must be compatible with a dark scene.
+Use stronger highlights, controlled glow if material allows it, and darker overall lighting.
+Do not generate daylight shadows.
+Do not make it look like daytime.
+`.trim();
+    }
+
+    if (lighting === "Golden hour") {
+        return `
+Lighting and environment target: GOLDEN HOUR.
+Use warm sunlight, soft long shadows, amber highlights, commercial outdoor photography mood.
+Do not use cold studio lighting.
+`.trim();
+    }
+
+    if (lighting === "Interior") {
+        return `
+Lighting and environment target: INTERIOR.
+Use soft indoor lighting, controlled reflections and realistic indoor shadow behavior.
+`.trim();
+    }
+
+    return `
+Lighting and environment target: DAYLIGHT.
+Use natural outdoor daylight, clean highlights, soft realistic shadows.
+Do not generate night lighting.
+`.trim();
+}
+
+function getRealismPrompt(realism: number) {
+    if (realism <= 30) {
+        return `
+Inflatable detail level: CLEAN.
+Very smooth shape.
+Minimal wrinkles.
+Minimal seams.
+Simple commercial mockup.
+Avoid complex folds and bumpy geometry.
+`.trim();
+    }
+
+    if (realism <= 60) {
+        return `
+Inflatable detail level: BALANCED.
+Clean commercial inflatable with moderate welded seams, mild tension lines and controlled PVC wrinkles.
+Do not add excessive folds.
+Do not make the object look damaged or deflated.
+`.trim();
+    }
+
+    if (realism <= 80) {
+        return `
+Inflatable detail level: REALISTIC.
+Visible welded seams, realistic PVC tension, soft rounded inflated edges, moderate physical fabric behavior.
+Keep geometry stable and clean.
+`.trim();
+    }
+
+    return `
+Inflatable detail level: VERY REALISTIC.
+More seam detail and material tension, but still clean, pressurized and professional.
+Avoid chaotic folds, deflation, melted shapes or excessive wrinkles.
 `.trim();
 }
 
 function getDimensionsPrompt(dimensions: RequestBody["dimensions"]) {
-    const widthM = dimensions?.widthM ?? 6;
-    const heightM = dimensions?.heightM ?? 4;
-    const depthM = dimensions?.depthM ?? 1.2;
-    const autoScale = dimensions?.autoScale ?? true;
+    const widthM = clamp(Number(dimensions?.widthM ?? 3), 0.5, 20);
+    const heightM = clamp(Number(dimensions?.heightM ?? 3), 0.5, 20);
+    const depthM = clamp(Number(dimensions?.depthM ?? 1.2), 0.2, 10);
+    const autoScale = dimensions?.autoScale ?? false;
 
     return `
-Target real-world gabarit:
-Width: ${widthM} meters.
-Height: ${heightM} meters.
-Depth: ${depthM} meters.
-Respect these proportions visually.
+Physical target size:
+Width: ${widthM.toFixed(1)} meters.
+Height: ${heightM.toFixed(1)} meters.
+Depth: ${depthM.toFixed(1)} meters.
 
-Auto-scale from scene: ${autoScale ? "enabled" : "disabled"}.
-The generated object should look plausible at this physical size.
+Important:
+- These dimensions describe the generated inflatable object itself.
+- Respect the width/height/depth ratio.
+- Do not make the object absurdly huge unless dimensions say so.
+- Do not make the object tiny unless dimensions say so.
+- Auto-scale from scene is ${autoScale ? "enabled" : "disabled"}.
 `.trim();
 }
 
-function getNegativePrompt(mode: GenerateMode, respectReference: number) {
+function getNegativePrompt(options: {
+    mode: GenerateMode;
+    respectReference: number;
+    realism: number;
+    lighting: string;
+}) {
+    const { mode, respectReference, realism, lighting } = options;
+
     let negative = `
-generic unrelated object,
-wrong object,
-different shape,
-changed silhouette,
+normal non-inflatable object,
+real food,
+real burger,
+real rigid product,
+hard sculpture,
+metal,
+stone,
+wood,
+paper,
+cardboard,
+deflated bag,
+melted geometry,
+chaotic folds,
+excessive wrinkles,
+bumpy damaged surface,
 floating object,
-cut off object,
 cropped object,
+cut off object,
 bad transparent edges,
 extra background,
 white background,
 black background,
 street background,
+building background,
 people,
 cars,
 trees,
-buildings,
-text artifacts,
-random letters,
+random props,
 watermark,
+random text,
+misspelled text,
+logo artifacts,
 low resolution,
 blurry,
-plastic toy,
-paper,
-cardboard,
-metal sculpture,
-rigid hard object,
-deflated bag,
-messy folds,
-melted geometry,
-distorted perspective
+distorted perspective,
+wrong scale
 `.trim();
 
-    if (mode === "replica" || respectReference >= 80) {
+    if (mode === "replica" || respectReference >= 85) {
         negative += `,
-redesigned product,
-creative reinterpretation,
-generic arch,
-generic tent,
-incorrect branding layout,
-incorrect pattern,
-missing reference details`;
+creative redesign,
+different silhouette,
+unrelated object,
+generic replacement,
+ignoring reference`;
+    }
+
+    if (realism <= 60) {
+        negative += `,
+too many wrinkles,
+deep folds,
+damaged fabric,
+dirty surface,
+overcomplicated geometry`;
+    }
+
+    if (lighting === "Noapte") {
+        negative += `,
+daylight scene,
+sunny daylight shadows`;
+    } else if (lighting === "Zi") {
+        negative += `,
+night scene,
+dark night lighting,
+strong neon glow`;
     }
 
     return negative;
@@ -298,19 +478,21 @@ async function analyzeReferenceWithGemini(refImage: string, googleKey?: string) 
                 },
             },
             `
-Analyze this inflatable product reference image.
+Analyze the provided image as a reference for a commercial inflatable product.
 
 Return strict JSON only:
 {
   "object_type": "short English object type",
   "shape_description": "short exact geometry/silhouette description",
-  "texture_description": "short description of colors, printed graphics, patterns and branding layout",
+  "texture_description": "short description of colors, surface pattern and graphics",
   "proportions": "short proportions description",
-  "manufacturing_notes": "short notes about seams, inflatable tubes, panels"
+  "manufacturing_notes": "short notes about seams, inflatable tubes and panels"
 }
 
-No markdown.
-No explanations outside JSON.
+Important:
+- If the reference is a normal object, describe how it could become an inflatable replica.
+- Do not describe the background.
+- No markdown.
 `,
         ]);
 
@@ -335,13 +517,17 @@ export async function POST(req: Request) {
             sceneImage,
             refImage,
             textureImage,
-            prompt = "professional inflatable advertising object",
-            generateMode = "replica",
+            prompt = "professional commercial inflatable object",
+            userPrompt = "",
+            productPreset = "",
+            productType = "Custom",
+            generateMode = "photo",
             referenceControl,
             dimensions,
             material = "PVC lucios",
             lighting = "Zi",
-            realism = 80,
+            realism = 55,
+            placement,
         } = body;
 
         const stabilityKey = process.env.STABILITY_API_KEY;
@@ -362,7 +548,7 @@ export async function POST(req: Request) {
         }
 
         const respectReference = clamp(
-            Number(referenceControl?.respectReference ?? 85),
+            Number(referenceControl?.respectReference ?? 65),
             0,
             100
         );
@@ -371,6 +557,8 @@ export async function POST(req: Request) {
         const respectTexture = referenceControl?.respectTexture ?? true;
         const respectProportions = referenceControl?.respectProportions ?? true;
         const respectBranding = referenceControl?.respectBranding ?? true;
+
+        const realismValue = clamp(Number(realism), 0, 100);
 
         const geminiAnalysis = refImage
             ? await analyzeReferenceWithGemini(refImage, googleKey)
@@ -388,14 +576,15 @@ export async function POST(req: Request) {
             hasTextureImage: Boolean(textureImage),
         });
 
-        const materialPrompt = getMaterialPrompt(material, lighting);
-        const realismPrompt = getRealismPrompt(clamp(Number(realism), 0, 100));
+        const productTypePrompt = getProductTypePrompt(productType, userPrompt);
+        const materialPrompt = getMaterialPrompt(material);
+        const lightingPrompt = getLightingPrompt(lighting);
+        const realismPrompt = getRealismPrompt(realismValue);
         const dimensionsPrompt = getDimensionsPrompt(dimensions);
-        const negativePrompt = getNegativePrompt(generateMode, respectReference);
 
         const geminiPrompt = geminiAnalysis
             ? `
-Reference analysis:
+Reference image analysis:
 Object type: ${geminiAnalysis.object_type}
 Shape: ${geminiAnalysis.shape_description}
 Texture / print: ${geminiAnalysis.texture_description}
@@ -404,11 +593,28 @@ Manufacturing notes: ${geminiAnalysis.manufacturing_notes}
 `
             : "";
 
-        const finalPrompt = `
-Create a high-quality transparent PNG overlay of a commercial inflatable product.
+        const placementPrompt = placement
+            ? `
+User selected placement on preview:
+X: ${Number(placement.x ?? 50).toFixed(1)}%.
+Y: ${Number(placement.y ?? 70).toFixed(1)}%.
+This is used only as compositing intent; generate object as clean transparent overlay.
+`
+            : "";
 
-USER REQUEST:
+        const finalPrompt = `
+Create a transparent PNG overlay of a commercial inflatable product.
+
+User short request:
+${userPrompt}
+
+Expanded product request:
 ${prompt}
+
+Selected product preset:
+${productPreset}
+
+${productTypePrompt}
 
 ${modePrompt}
 
@@ -420,22 +626,33 @@ ${dimensionsPrompt}
 
 ${materialPrompt}
 
+${lightingPrompt}
+
 ${realismPrompt}
 
-COMPOSITING REQUIREMENTS:
-- Generate only the inflatable object as a clean PNG overlay.
+${placementPrompt}
+
+Critical output rules:
+- Generate ONLY the inflatable object.
 - Transparent background.
-- The object must be complete, not cropped.
-- The base of the object must visually sit on a ground or mounting surface when composited.
-- Correct commercial product scale.
-- Correct perspective for placement in a real scene.
-- No people.
 - No environment.
-- No extra props.
-- No watermark.
-- No random text artifacts.
-- Use realistic inflatable PVC construction.
+- No people.
+- No cars.
+- No trees.
+- No buildings.
+- The object must be complete and not cropped.
+- The object must be fabricable as a real inflatable.
+- The object must have a stable base or plausible suspension depending on the subject.
+- If the subject is a burger, bottle, mascot or product replica, it must be an inflatable version of that subject, not the real object.
+- Keep the design clean enough for commercial client presentation.
 `.trim();
+
+        const negativePrompt = getNegativePrompt({
+            mode: generateMode,
+            respectReference,
+            realism: realismValue,
+            lighting,
+        });
 
         const formData = new FormData();
         formData.append("prompt", finalPrompt);
@@ -449,11 +666,11 @@ COMPOSITING REQUIREMENTS:
 
             const strength =
                 respectReference >= 90
-                    ? "0.38"
+                    ? "0.32"
                     : respectReference >= 75
-                      ? "0.48"
+                      ? "0.44"
                       : respectReference >= 55
-                        ? "0.60"
+                        ? "0.58"
                         : "0.72";
 
             formData.append("strength", strength);
@@ -545,6 +762,9 @@ COMPOSITING REQUIREMENTS:
             prompt: finalPrompt,
             negativePrompt,
             debug: {
+                userPrompt,
+                productPreset,
+                productType,
                 generateMode,
                 respectReference,
                 respectShape,
@@ -553,8 +773,9 @@ COMPOSITING REQUIREMENTS:
                 respectBranding,
                 material,
                 lighting,
-                realism,
+                realism: realismValue,
                 dimensions,
+                placement,
                 geminiAnalysis,
             },
         });
