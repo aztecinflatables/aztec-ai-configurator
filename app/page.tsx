@@ -351,7 +351,6 @@ export default function Page() {
     const previewRef = useRef<HTMLDivElement | null>(null);
 
     const subjectPrompt = cleanUserPrompt(userPrompt) || userPrompt.trim();
-    const fullPrompt = `${subjectPrompt}. ${PRODUCT_PRESETS[selectedProductType]}`;
     const displayedScene = resultSceneUrl || sceneImage;
 
     const objectFilter = `
@@ -640,7 +639,7 @@ export default function Page() {
                     refImage,
                     textureImage,
                     maskImage: maskBase64,
-                    prompt: fullPrompt,
+                    prompt: subjectPrompt,
                     userPrompt: subjectPrompt,
                     productPreset: PRODUCT_PRESETS[selectedProductType],
                     productType: selectedProductType,
