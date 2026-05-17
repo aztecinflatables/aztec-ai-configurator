@@ -44,14 +44,22 @@ const PRODUCT_PRESETS: Record<ProductType, string> = {
         "Obiect gonflabil personalizat, realist, fabricabil, cu formă stabilă, material PVC profesional și proporții comerciale.",
 };
 
-function getDerivedDimensions(productType: ProductType, heightM: number) {
-    if (productType === "Arcadă") return { widthM: heightM * 1.25, depthM: heightM * 0.25 };
-    if (productType === "Mascotă") return { widthM: heightM * 0.9, depthM: heightM * 0.55 };
-    if (productType === "Cupolă") return { widthM: heightM * 1.8, depthM: heightM * 1.8 };
-    if (productType === "Cort") return { widthM: heightM * 1.5, depthM: heightM * 1.5 };
-    if (productType === "Tunel") return { widthM: heightM * 1.1, depthM: heightM * 2.2 };
-    if (productType === "Sticlă") return { widthM: heightM * 0.35, depthM: heightM * 0.35 };
-    return { widthM: heightM, depthM: heightM * 0.5 };
+function clamp(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function normalizeText(value: string) {
+    return value
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/ă/g, "a")
+        .replace(/â/g, "a")
+        .replace(/î/g, "i")
+        .replace(/ș/g, "s")
+        .replace(/ş/g, "s")
+        .replace(/ț/g, "t")
+        .replace(/ţ/g, "t");
 }
 
 function cleanUserPrompt(value: string) {
@@ -72,35 +80,14 @@ function cleanUserPrompt(value: string) {
         .trim();
 }
 
-function normalizeText(value: string) {
-    return value
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
-}
-
-function clamp(value: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, value));
-}
-
-function getObjectFilter(lighting: string, material: MaterialMode) {
-    if (lighting === "Noapte") {
-        if (material === "LED interior" || material === "Alb translucid") {
-            return "brightness(0.92) contrast(1.08) saturate(1.18) drop-shadow(0 0 18px rgba(255,230,170,0.42)) drop-shadow(0 0 38px rgba(255,150,40,0.26))";
-        }
-
-        return "brightness(0.72) contrast(1.12) saturate(0.9) drop-shadow(0 0 12px rgba(120,170,255,0.16))";
-    }
-
-    if (lighting === "Golden hour") {
-        return "brightness(1.04) contrast(1.05) saturate(1.12) sepia(0.15) hue-rotate(-7deg) drop-shadow(10px 16px 18px rgba(0,0,0,0.22))";
-    }
-
-    if (lighting === "Interior") {
-        return "brightness(0.96) contrast(1.03) saturate(0.92) drop-shadow(0 12px 18px rgba(0,0,0,0.20))";
-    }
-
-    return "brightness(1) contrast(1.03) saturate(1.04) drop-shadow(0 10px 16px rgba(0,0,0,0.16))";
+function getDerivedDimensions(productType: ProductType, heightM: number) {
+    if (productType === "Arcadă") return { widthM: heightM * 1.25, depthM: heightM * 0.25 };
+    if (productType === "Mascotă") return { widthM: heightM * 0.9, depthM: heightM * 0.55 };
+    if (productType === "Cupolă") return { widthM: heightM * 1.8, depthM: heightM * 1.8 };
+    if (productType === "Cort") return { widthM: heightM * 1.5, depthM: heightM * 1.5 };
+    if (productType === "Tunel") return { widthM: heightM * 1.1, depthM: heightM * 2.2 };
+    if (productType === "Sticlă") return { widthM: heightM * 0.35, depthM: heightM * 0.35 };
+    return { widthM: heightM, depthM: heightM * 0.5 };
 }
 
 function getDefaultShadowSettings(placementMode: PlacementMode) {
@@ -123,30 +110,24 @@ function getDefaultShadowSettings(placementMode: PlacementMode) {
     return { x: 3, y: 2, scaleX: 84, scaleY: 15, blur: 16, opacity: 36, skew: -6 };
 }
 
-function getMaskAspect(
-    productType: ProductType,
-    prompt: string,
-    shapeDetail: number
-) {
-    const p = normalizeText(prompt);
-    const detailT = clamp(shapeDetail / 100, 0, 1);
-    const burgerLike = p.includes("burger") || p.includes("hamburger");
+function getObjectFilter(lighting: string, material: MaterialMode) {
+    if (lighting === "Noapte") {
+        if (material === "LED interior" || material === "Alb translucid") {
+            return "brightness(0.92) contrast(1.08) saturate(1.18) drop-shadow(0 0 18px rgba(255,230,170,0.42)) drop-shadow(0 0 38px rgba(255,150,40,0.26))";
+        }
 
-    if (burgerLike) {
-        return {
-            widthRatio: 1.18,
-            heightRatio: 0.68 + detailT * 0.14,
-        };
+        return "brightness(0.72) contrast(1.12) saturate(0.9) drop-shadow(0 0 12px rgba(120,170,255,0.16))";
     }
 
-    if (productType === "Arcadă") return { widthRatio: 1.25, heightRatio: 1.02 };
-    if (productType === "Tunel") return { widthRatio: 1.22, heightRatio: 1.0 };
-    if (productType === "Cort") return { widthRatio: 1.18, heightRatio: 0.92 };
-    if (productType === "Cupolă") return { widthRatio: 1.2, heightRatio: 0.82 };
-    if (productType === "Sticlă") return { widthRatio: 0.58, heightRatio: 1.6 };
-    if (productType === "Mascotă") return { widthRatio: 0.9, heightRatio: 1.1 };
+    if (lighting === "Golden hour") {
+        return "brightness(1.04) contrast(1.05) saturate(1.12) sepia(0.15) hue-rotate(-7deg) drop-shadow(10px 16px 18px rgba(0,0,0,0.22))";
+    }
 
-    return { widthRatio: 1.0, heightRatio: 1.0 };
+    if (lighting === "Interior") {
+        return "brightness(0.96) contrast(1.03) saturate(0.92) drop-shadow(0 12px 18px rgba(0,0,0,0.20))";
+    }
+
+    return "brightness(1) contrast(1.03) saturate(1.04) drop-shadow(0 10px 16px rgba(0,0,0,0.16))";
 }
 
 function roundedRectPath(
@@ -158,6 +139,7 @@ function roundedRectPath(
     radius: number
 ) {
     const r = Math.min(radius, width / 2, height / 2);
+
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + width - r, y);
@@ -171,179 +153,50 @@ function roundedRectPath(
     ctx.closePath();
 }
 
-function drawBurgerMask(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    baseY: number,
-    width: number,
-    height: number,
-    detail: number
-) {
-    const detailT = clamp(detail / 100, 0, 1);
+function getInpaintWorkAreaAspect(productType: ProductType, prompt: string, shapeDetail: number) {
+    const text = normalizeText(prompt);
+    const detail = clamp(shapeDetail / 100, 0, 1);
 
-    const totalH = height * (0.78 + detailT * 0.12);
-    const topBunH = totalH * 0.4;
-    const fillingsH = totalH * (0.16 + detailT * 0.12);
-    const bottomBunH = totalH * 0.22;
-    const bodyBottom = baseY;
-    const bodyTop = bodyBottom - totalH;
-    const topCenterY = bodyTop + topBunH * 0.54;
-
-    ctx.beginPath();
-    ctx.ellipse(cx, topCenterY, width * 0.46, topBunH * 0.64, 0, Math.PI, 0, true);
-    ctx.lineTo(cx + width * 0.46, bodyBottom - bottomBunH * 0.8);
-    ctx.quadraticCurveTo(
-        cx + width * 0.44,
-        bodyBottom - bottomBunH * 0.25,
-        cx + width * 0.32,
-        bodyBottom - bottomBunH * 0.02
-    );
-    ctx.lineTo(cx - width * 0.32, bodyBottom - bottomBunH * 0.02);
-    ctx.quadraticCurveTo(
-        cx - width * 0.44,
-        bodyBottom - bottomBunH * 0.25,
-        cx - width * 0.46,
-        bodyBottom - bottomBunH * 0.8
-    );
-    ctx.closePath();
-    ctx.fill();
-
-    if (detail >= 8) {
-        ctx.fillRect(
-            cx - width * 0.4,
-            bodyTop + topBunH * 0.9,
-            width * 0.8,
-            fillingsH
-        );
+    if (
+        text.includes("burger") ||
+        text.includes("hamburger") ||
+        text.includes("pizza") ||
+        text.includes("sandwich") ||
+        text.includes("hotdog")
+    ) {
+        return {
+            width: 1.55,
+            height: 0.95 + detail * 0.2,
+            roundness: 0.42,
+        };
     }
-}
 
-function drawBottleMask(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    baseY: number,
-    width: number,
-    height: number
-) {
-    const h = height;
-    const w = width;
-    const topY = baseY - h;
+    if (
+        text.includes("pinguin") ||
+        text.includes("penguin") ||
+        text.includes("catel") ||
+        text.includes("caine") ||
+        text.includes("dog") ||
+        text.includes("pisica") ||
+        text.includes("cat") ||
+        text.includes("urs") ||
+        text.includes("bear")
+    ) {
+        return {
+            width: 1.0,
+            height: 1.35,
+            roundness: 0.35,
+        };
+    }
 
-    ctx.beginPath();
-    ctx.moveTo(cx - w * 0.2, topY + h * 0.18);
-    ctx.lineTo(cx - w * 0.12, topY + h * 0.06);
-    ctx.lineTo(cx - w * 0.12, topY + h * 0.0);
-    ctx.lineTo(cx + w * 0.12, topY + h * 0.0);
-    ctx.lineTo(cx + w * 0.12, topY + h * 0.06);
-    ctx.lineTo(cx + w * 0.2, topY + h * 0.18);
-    ctx.quadraticCurveTo(cx + w * 0.5, topY + h * 0.26, cx + w * 0.48, topY + h * 0.62);
-    ctx.lineTo(cx + w * 0.42, baseY - h * 0.05);
-    ctx.quadraticCurveTo(cx + w * 0.36, baseY, cx + w * 0.22, baseY);
-    ctx.lineTo(cx - w * 0.22, baseY);
-    ctx.quadraticCurveTo(cx - w * 0.36, baseY, cx - w * 0.42, baseY - h * 0.05);
-    ctx.lineTo(cx - w * 0.48, topY + h * 0.62);
-    ctx.quadraticCurveTo(cx - w * 0.5, topY + h * 0.26, cx - w * 0.2, topY + h * 0.18);
-    ctx.closePath();
-    ctx.fill();
-}
+    if (productType === "Arcadă") return { width: 1.55, height: 1.25, roundness: 0.18 };
+    if (productType === "Tunel") return { width: 1.45, height: 1.1, roundness: 0.22 };
+    if (productType === "Cort") return { width: 1.45, height: 1.05, roundness: 0.2 };
+    if (productType === "Cupolă") return { width: 1.35, height: 0.95, roundness: 0.45 };
+    if (productType === "Sticlă") return { width: 0.7, height: 1.65, roundness: 0.25 };
+    if (productType === "Mascotă") return { width: 1.0, height: 1.35, roundness: 0.35 };
 
-function drawArchMask(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    baseY: number,
-    width: number,
-    height: number
-) {
-    const w = width;
-    const h = height;
-    const legX1 = cx - w * 0.36;
-    const legX2 = cx + w * 0.36;
-    const topY = baseY - h * 0.88;
-
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = Math.max(12, w * 0.18);
-    ctx.beginPath();
-    ctx.moveTo(legX1, baseY);
-    ctx.lineTo(legX1, baseY - h * 0.38);
-    ctx.quadraticCurveTo(cx - w * 0.34, topY + h * 0.08, cx, topY);
-    ctx.quadraticCurveTo(cx + w * 0.34, topY + h * 0.08, legX2, baseY - h * 0.38);
-    ctx.lineTo(legX2, baseY);
-    ctx.stroke();
-}
-
-function drawTunnelMask(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    baseY: number,
-    width: number,
-    height: number
-) {
-    const w = width;
-    const h = height;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = Math.max(12, w * 0.22);
-    ctx.beginPath();
-    ctx.moveTo(cx - w * 0.34, baseY);
-    ctx.lineTo(cx - w * 0.34, baseY - h * 0.32);
-    ctx.quadraticCurveTo(cx - w * 0.28, baseY - h * 0.95, cx, baseY - h * 0.95);
-    ctx.quadraticCurveTo(cx + w * 0.28, baseY - h * 0.95, cx + w * 0.34, baseY - h * 0.32);
-    ctx.lineTo(cx + w * 0.34, baseY);
-    ctx.stroke();
-}
-
-function drawTentMask(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    baseY: number,
-    width: number,
-    height: number
-) {
-    const w = width;
-    const h = height;
-    const x = cx - w / 2;
-    const y = baseY - h;
-
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.08, baseY);
-    ctx.lineTo(x + w * 0.18, y + h * 0.34);
-    ctx.quadraticCurveTo(x + w * 0.28, y + h * 0.08, cx, y + h * 0.06);
-    ctx.quadraticCurveTo(x + w * 0.72, y + h * 0.08, x + w * 0.82, y + h * 0.34);
-    ctx.lineTo(x + w * 0.92, baseY);
-    ctx.closePath();
-    ctx.fill();
-}
-
-function drawDomeMask(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    baseY: number,
-    width: number,
-    height: number
-) {
-    const w = width;
-    const h = height;
-    ctx.beginPath();
-    ctx.moveTo(cx - w * 0.48, baseY);
-    ctx.quadraticCurveTo(cx - w * 0.46, baseY - h * 0.96, cx, baseY - h * 0.96);
-    ctx.quadraticCurveTo(cx + w * 0.46, baseY - h * 0.96, cx + w * 0.48, baseY);
-    ctx.closePath();
-    ctx.fill();
-}
-
-function drawSimpleBlobMask(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    baseY: number,
-    width: number,
-    height: number,
-    radiusFactor = 0.32
-) {
-    const x = cx - width / 2;
-    const y = baseY - height;
-    roundedRectPath(ctx, x, y, width, height, Math.min(width, height) * radiusFactor);
-    ctx.fill();
+    return { width: 1.1, height: 1.1, roundness: 0.35 };
 }
 
 function makeProceduralInflatableSvgDataUrl(options: {
@@ -355,8 +208,7 @@ function makeProceduralInflatableSvgDataUrl(options: {
 }) {
     const prompt = normalizeText(options.prompt);
     const isBurger = prompt.includes("burger") || prompt.includes("hamburger");
-    const ledGlow =
-        options.material === "LED interior" || options.material === "Alb translucid";
+    const ledGlow = options.material === "LED interior" || options.material === "Alb translucid";
     const night = options.lighting === "Noapte";
     const warm = options.lighting === "Golden hour";
     const detailT = clamp(options.shapeDetail / 10, 0, 1);
@@ -446,12 +298,10 @@ export default function Page() {
     const [textureImage, setTextureImage] = useState<string | null>(null);
 
     const [userPrompt, setUserPrompt] = useState("burger");
-    const [selectedProductType, setSelectedProductType] =
-        useState<ProductType>("Mascotă");
-    const [placementMode, setPlacementMode] =
-        useState<PlacementMode>("Pe acoperiș");
+    const [selectedProductType, setSelectedProductType] = useState<ProductType>("Mascotă");
+    const [placementMode, setPlacementMode] = useState<PlacementMode>("Pe sol");
 
-    const [generateMode, setGenerateMode] = useState<GenerateMode>("replica");
+    const [generateMode, setGenerateMode] = useState<GenerateMode>("photo");
 
     const [respectReference, setRespectReference] = useState(85);
     const [respectShape, setRespectShape] = useState(true);
@@ -465,7 +315,7 @@ export default function Page() {
     const [material, setMaterial] = useState<MaterialMode>("PVC lucios");
     const [lighting, setLighting] = useState("Zi");
 
-    const [shapeDetail, setShapeDetail] = useState(10);
+    const [shapeDetail, setShapeDetail] = useState(15);
 
     const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
     const [resultSceneUrl, setResultSceneUrl] = useState<string | null>(null);
@@ -474,8 +324,8 @@ export default function Page() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const [posX, setPosX] = useState(54);
-    const [posY, setPosY] = useState(72);
+    const [posX, setPosX] = useState(58);
+    const [posY, setPosY] = useState(92);
     const [overlayScale, setOverlayScale] = useState(32);
     const [rotation, setRotation] = useState(0);
 
@@ -497,7 +347,6 @@ export default function Page() {
 
     const subjectPrompt = cleanUserPrompt(userPrompt) || userPrompt.trim();
     const fullPrompt = `${subjectPrompt}. ${PRODUCT_PRESETS[selectedProductType]}`;
-
     const displayedScene = resultSceneUrl || sceneImage;
 
     const objectFilter = `
@@ -541,9 +390,7 @@ export default function Page() {
         setShadowSkew(next.skew);
     };
 
-    const handleSceneUpload = async (
-        event: React.ChangeEvent<HTMLInputElement>
-    ) => {
+    const handleSceneUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
@@ -556,9 +403,7 @@ export default function Page() {
         setError(null);
     };
 
-    const handleRefUpload = async (
-        event: React.ChangeEvent<HTMLInputElement>
-    ) => {
+    const handleRefUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
@@ -567,9 +412,7 @@ export default function Page() {
         clearResults();
     };
 
-    const handleTextureUpload = async (
-        event: React.ChangeEvent<HTMLInputElement>
-    ) => {
+    const handleTextureUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
@@ -623,8 +466,6 @@ export default function Page() {
 
         ctx.fillStyle = "black";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "white";
-        ctx.strokeStyle = "white";
 
         const stageW = metrics.stageRect.width;
         const stageH = metrics.stageRect.height;
@@ -632,101 +473,70 @@ export default function Page() {
         const anchorStageX = (posX / 100) * stageW;
         const anchorStageY = (posY / 100) * stageH;
 
-        const imageX =
-            ((anchorStageX - metrics.imageLeft) / metrics.imageWidth) * canvas.width;
-        const imageY =
-            ((anchorStageY - metrics.imageTop) / metrics.imageHeight) * canvas.height;
+        const imageX = ((anchorStageX - metrics.imageLeft) / metrics.imageWidth) * canvas.width;
+        const imageY = ((anchorStageY - metrics.imageTop) / metrics.imageHeight) * canvas.height;
 
         const displayedObjectWidthPx = (overlayScale / 100) * stageW;
-        const objectWidthInImagePx =
-            (displayedObjectWidthPx / metrics.imageWidth) * canvas.width;
+        const objectWidthInImagePx = (displayedObjectWidthPx / metrics.imageWidth) * canvas.width;
 
-        const aspect = getMaskAspect(selectedProductType, subjectPrompt, shapeDetail);
-        const objectMaskWidth = objectWidthInImagePx * aspect.widthRatio;
-        const objectMaskHeight = objectWidthInImagePx * aspect.heightRatio;
+        const aspect = getInpaintWorkAreaAspect(selectedProductType, subjectPrompt, shapeDetail);
 
-        const promptNorm = normalizeText(subjectPrompt);
-        const burgerLike =
-            promptNorm.includes("burger") || promptNorm.includes("hamburger");
+        const workWidth = clamp(
+            objectWidthInImagePx * aspect.width,
+            canvas.width * 0.08,
+            canvas.width * 0.72
+        );
+
+        const workHeight = clamp(
+            objectWidthInImagePx * aspect.height,
+            canvas.height * 0.08,
+            canvas.height * 0.72
+        );
+
+        const extraContactSpace = clamp(workHeight * 0.22, 28, 160);
+        const extraSideSpace = clamp(workWidth * 0.08, 16, 110);
+
+        const x = imageX - workWidth / 2 - extraSideSpace;
+        const y = imageY - workHeight - extraContactSpace * 0.35;
+        const w = workWidth + extraSideSpace * 2;
+        const h = workHeight + extraContactSpace;
 
         ctx.save();
         ctx.translate(imageX, imageY);
         ctx.rotate((rotation * Math.PI) / 180);
         ctx.translate(-imageX, -imageY);
 
-        if (burgerLike) {
-            drawBurgerMask(
-                ctx,
-                imageX,
-                imageY,
-                objectMaskWidth,
-                objectMaskHeight,
-                shapeDetail
-            );
-        } else if (selectedProductType === "Arcadă") {
-            drawArchMask(
-                ctx,
-                imageX,
-                imageY,
-                objectMaskWidth,
-                objectMaskHeight
-            );
-        } else if (selectedProductType === "Tunel") {
-            drawTunnelMask(
-                ctx,
-                imageX,
-                imageY,
-                objectMaskWidth,
-                objectMaskHeight
-            );
-        } else if (selectedProductType === "Cort") {
-            drawTentMask(
-                ctx,
-                imageX,
-                imageY,
-                objectMaskWidth,
-                objectMaskHeight
-            );
-        } else if (selectedProductType === "Cupolă") {
-            drawDomeMask(
-                ctx,
-                imageX,
-                imageY,
-                objectMaskWidth,
-                objectMaskHeight
-            );
-        } else if (selectedProductType === "Sticlă") {
-            drawBottleMask(
-                ctx,
-                imageX,
-                imageY,
-                objectMaskWidth,
-                objectMaskHeight
-            );
-        } else if (selectedProductType === "Mascotă") {
-            drawSimpleBlobMask(
-                ctx,
-                imageX,
-                imageY,
-                objectMaskWidth,
-                objectMaskHeight,
-                0.42
-            );
+        ctx.fillStyle = "white";
+
+        if (placementMode === "Pe fațadă") {
+            roundedRectPath(ctx, x, y, w, h, Math.min(w, h) * 0.22);
+            ctx.fill();
+        } else if (placementMode === "Suspendat") {
+            ctx.beginPath();
+            ctx.ellipse(imageX, imageY - workHeight * 0.52, w * 0.52, h * 0.48, 0, 0, Math.PI * 2);
+            ctx.fill();
         } else {
-            drawSimpleBlobMask(
-                ctx,
+            roundedRectPath(ctx, x, y, w, h, Math.min(w, h) * aspect.roundness);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.ellipse(
                 imageX,
-                imageY,
-                objectMaskWidth,
-                objectMaskHeight,
-                0.34
+                imageY + extraContactSpace * 0.22,
+                w * 0.46,
+                extraContactSpace * 0.45,
+                0,
+                0,
+                Math.PI * 2
             );
+            ctx.fill();
         }
 
         ctx.restore();
 
         const dataUrl = canvas.toDataURL("image/png");
         setMaskDebugUrl(dataUrl);
+
         return dataUrl.split(",")[1];
     };
 
@@ -787,6 +597,7 @@ export default function Page() {
             }
 
             const maskBase64 = buildMaskBase64();
+
             if (!maskBase64) {
                 throw new Error("Nu am putut genera masca pentru inpaint.");
             }
@@ -807,8 +618,7 @@ export default function Page() {
                     productType: selectedProductType,
                     placementMode,
                     generateMode,
-                    renderPipeline:
-                        generateMode === "rapid" ? "overlay" : "inpaint",
+                    renderPipeline: generateMode === "rapid" ? "overlay" : "inpaint",
                     referenceControl: {
                         respectReference,
                         respectShape,
@@ -855,9 +665,7 @@ export default function Page() {
             }
 
             if (data.compositedUrl || data.resultSceneUrl || data.finalImageUrl) {
-                setResultSceneUrl(
-                    data.compositedUrl || data.resultSceneUrl || data.finalImageUrl
-                );
+                setResultSceneUrl(data.compositedUrl || data.resultSceneUrl || data.finalImageUrl);
                 setOverlayUrl(null);
             } else if (data.overlayUrl) {
                 setOverlayUrl(data.overlayUrl);
@@ -945,14 +753,7 @@ export default function Page() {
                                 placeholder="Ex: burger, arcadă AZTEC, mascotă urs, sticlă de suc..."
                             />
 
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    gap: 8,
-                                    marginTop: 12,
-                                }}
-                            >
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
                                 {(
                                     [
                                         "Arcadă",
@@ -1089,9 +890,7 @@ export default function Page() {
 
                             <div className="aztec-slider-header">
                                 <div className="aztec-label">Respectă referința</div>
-                                <div className="aztec-slider-value">
-                                    {respectReference}%
-                                </div>
+                                <div className="aztec-slider-value">{respectReference}%</div>
                             </div>
 
                             <input
@@ -1179,9 +978,7 @@ export default function Page() {
 
                             <div className="aztec-slider-header">
                                 <div className="aztec-label">Înălțime țintă</div>
-                                <div className="aztec-slider-value">
-                                    {heightM.toFixed(1)} m
-                                </div>
+                                <div className="aztec-slider-value">{heightM.toFixed(1)} m</div>
                             </div>
 
                             <input
@@ -1205,8 +1002,7 @@ export default function Page() {
                                     <br />
                                     Lățime: {derived.widthM.toFixed(1)} m
                                     <br />
-                                    Lungime / adâncime:{" "}
-                                    {derived.depthM.toFixed(1)} m
+                                    Lungime / adâncime: {derived.depthM.toFixed(1)} m
                                 </strong>
                             </div>
                         </div>
@@ -1291,9 +1087,7 @@ export default function Page() {
 
                             <div className="aztec-slider-header">
                                 <div className="aztec-label">Poziție X</div>
-                                <div className="aztec-slider-value">
-                                    {posX.toFixed(1)}%
-                                </div>
+                                <div className="aztec-slider-value">{posX.toFixed(1)}%</div>
                             </div>
 
                             <input
@@ -1309,14 +1103,9 @@ export default function Page() {
                                 }}
                             />
 
-                            <div
-                                className="aztec-slider-header"
-                                style={{ marginTop: 14 }}
-                            >
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
                                 <div className="aztec-label">Poziție Y</div>
-                                <div className="aztec-slider-value">
-                                    {posY.toFixed(1)}%
-                                </div>
+                                <div className="aztec-slider-value">{posY.toFixed(1)}%</div>
                             </div>
 
                             <input
@@ -1332,14 +1121,9 @@ export default function Page() {
                                 }}
                             />
 
-                            <div
-                                className="aztec-slider-header"
-                                style={{ marginTop: 14 }}
-                            >
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
                                 <div className="aztec-label">Scală pe imagine</div>
-                                <div className="aztec-slider-value">
-                                    {overlayScale}%
-                                </div>
+                                <div className="aztec-slider-value">{overlayScale}%</div>
                             </div>
 
                             <input
@@ -1354,14 +1138,9 @@ export default function Page() {
                                 }}
                             />
 
-                            <div
-                                className="aztec-slider-header"
-                                style={{ marginTop: 14 }}
-                            >
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
                                 <div className="aztec-label">Rotație</div>
-                                <div className="aztec-slider-value">
-                                    {rotation}°
-                                </div>
+                                <div className="aztec-slider-value">{rotation}°</div>
                             </div>
 
                             <input
@@ -1376,16 +1155,9 @@ export default function Page() {
                                 }}
                             />
 
-                            <div
-                                className="aztec-slider-header"
-                                style={{ marginTop: 14 }}
-                            >
-                                <div className="aztec-label">
-                                    Detaliu formă
-                                </div>
-                                <div className="aztec-slider-value">
-                                    {shapeDetail}%
-                                </div>
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Detaliu formă</div>
+                                <div className="aztec-slider-value">{shapeDetail}%</div>
                             </div>
 
                             <input
@@ -1401,9 +1173,9 @@ export default function Page() {
                             />
 
                             <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                0–10% = formă simplificată, dar recognoscibilă. În
-                                modul MOCKUP rămâne local. În FOTO / REPLICĂ se
-                                trimite mască pentru inpaint.
+                                În FOTO / REPLICĂ masca este acum zonă de lucru generoasă,
+                                nu contur fix de obiect. Asta lasă AI-ul să creeze forma,
+                                contactul și umbra în interiorul zonei.
                             </div>
                         </div>
                     </section>
@@ -1569,8 +1341,8 @@ export default function Page() {
                                         lineHeight: 1.4,
                                     }}
                                 >
-                                    În mod FOTO / REPLICĂ se trimite mască pentru
-                                    inpaint.
+                                    În mod FOTO / REPLICĂ se trimite zonă generoasă
+                                    pentru inpaint.
                                 </div>
                             </div>
                         </div>
