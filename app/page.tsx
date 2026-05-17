@@ -45,30 +45,12 @@ const PRODUCT_PRESETS: Record<ProductType, string> = {
 };
 
 function getDerivedDimensions(productType: ProductType, heightM: number) {
-    if (productType === "Arcadă") {
-        return { widthM: heightM * 1.25, depthM: heightM * 0.25 };
-    }
-
-    if (productType === "Mascotă") {
-        return { widthM: heightM * 0.9, depthM: heightM * 0.55 };
-    }
-
-    if (productType === "Cupolă") {
-        return { widthM: heightM * 1.8, depthM: heightM * 1.8 };
-    }
-
-    if (productType === "Cort") {
-        return { widthM: heightM * 1.5, depthM: heightM * 1.5 };
-    }
-
-    if (productType === "Tunel") {
-        return { widthM: heightM * 1.1, depthM: heightM * 2.2 };
-    }
-
-    if (productType === "Sticlă") {
-        return { widthM: heightM * 0.35, depthM: heightM * 0.35 };
-    }
-
+    if (productType === "Arcadă") return { widthM: heightM * 1.25, depthM: heightM * 0.25 };
+    if (productType === "Mascotă") return { widthM: heightM * 0.9, depthM: heightM * 0.55 };
+    if (productType === "Cupolă") return { widthM: heightM * 1.8, depthM: heightM * 1.8 };
+    if (productType === "Cort") return { widthM: heightM * 1.5, depthM: heightM * 1.5 };
+    if (productType === "Tunel") return { widthM: heightM * 1.1, depthM: heightM * 2.2 };
+    if (productType === "Sticlă") return { widthM: heightM * 0.35, depthM: heightM * 0.35 };
     return { widthM: heightM, depthM: heightM * 0.5 };
 }
 
@@ -88,6 +70,13 @@ function cleanUserPrompt(value: string) {
         .replace(/\s+,/g, ",")
         .replace(/,+/g, ",")
         .trim();
+}
+
+function normalizeText(value: string) {
+    return value
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
 }
 
 function getObjectFilter(lighting: string, material: MaterialMode) {
@@ -112,62 +101,154 @@ function getObjectFilter(lighting: string, material: MaterialMode) {
 
 function getDefaultShadowSettings(placementMode: PlacementMode) {
     if (placementMode === "Pe fațadă") {
-        return {
-            x: 4,
-            y: 4,
-            scaleX: 78,
-            scaleY: 62,
-            blur: 18,
-            opacity: 32,
-            skew: 0,
-        };
+        return { x: 4, y: 4, scaleX: 78, scaleY: 62, blur: 18, opacity: 32, skew: 0 };
     }
 
     if (placementMode === "Suspendat") {
-        return {
-            x: 0,
-            y: 24,
-            scaleX: 70,
-            scaleY: 12,
-            blur: 24,
-            opacity: 20,
-            skew: 0,
-        };
+        return { x: 0, y: 24, scaleX: 70, scaleY: 12, blur: 24, opacity: 20, skew: 0 };
     }
 
     if (placementMode === "Pe acoperiș") {
-        return {
-            x: 4,
-            y: 2,
-            scaleX: 86,
-            scaleY: 16,
-            blur: 18,
-            opacity: 34,
-            skew: -8,
-        };
+        return { x: 4, y: 2, scaleX: 86, scaleY: 16, blur: 18, opacity: 34, skew: -8 };
     }
 
     if (placementMode === "În interior") {
-        return {
-            x: 2,
-            y: 3,
-            scaleX: 82,
-            scaleY: 15,
-            blur: 16,
-            opacity: 28,
-            skew: 0,
-        };
+        return { x: 2, y: 3, scaleX: 82, scaleY: 15, blur: 16, opacity: 28, skew: 0 };
     }
 
-    return {
-        x: 3,
-        y: 2,
-        scaleX: 84,
-        scaleY: 15,
-        blur: 16,
-        opacity: 36,
-        skew: -6,
-    };
+    return { x: 3, y: 2, scaleX: 84, scaleY: 15, blur: 16, opacity: 36, skew: -6 };
+}
+
+function makeProceduralInflatableSvgDataUrl(options: {
+    prompt: string;
+    productType: ProductType;
+    material: MaterialMode;
+    lighting: string;
+}) {
+    const prompt = normalizeText(options.prompt);
+    const isBurger = prompt.includes("burger") || prompt.includes("hamburger");
+
+    const ledGlow =
+        options.material === "LED interior" || options.material === "Alb translucid";
+
+    const night = options.lighting === "Noapte";
+    const warm = options.lighting === "Golden hour";
+
+    const bgGlow = ledGlow
+        ? `<ellipse cx="512" cy="410" rx="430" ry="230" fill="rgba(255,215,125,0.22)" filter="url(#blurGlow)" />`
+        : "";
+
+    const glossyOpacity = options.material === "PVC mat" ? 0.16 : 0.34;
+    const seamOpacity = options.material === "PVC mat" ? 0.18 : 0.28;
+    const globalBrightness = night ? 0.78 : warm ? 1.06 : 1;
+
+    let body = "";
+
+    if (isBurger) {
+        body = `
+            <g filter="url(#softShadow)">
+                <ellipse cx="512" cy="500" rx="390" ry="210" fill="url(#burgerBase)" />
+                <path d="M150 495 C260 418 760 418 874 495 C762 565 262 565 150 495 Z" fill="rgba(255,255,255,0.10)" />
+                <path d="M170 450 C280 390 748 390 854 450 L854 500 C736 450 287 450 170 500 Z" fill="url(#bunTop)" />
+                <path d="M175 510 C290 555 735 555 850 510 L850 565 C732 615 292 615 175 565 Z" fill="url(#bunBottom)" />
+
+                <rect x="170" y="471" width="684" height="28" rx="14" fill="url(#tomatoBand)" opacity="0.92" />
+                <rect x="188" y="501" width="648" height="34" rx="17" fill="url(#lettuceBand)" opacity="0.86" />
+                <rect x="200" y="535" width="624" height="42" rx="21" fill="url(#pattyBand)" opacity="0.9" />
+                <rect x="210" y="575" width="604" height="32" rx="16" fill="url(#cheeseBand)" opacity="0.82" />
+
+                <ellipse cx="512" cy="500" rx="390" ry="210" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="500" rx="389" ry="209" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
+                <ellipse cx="512" cy="500" rx="372" ry="195" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="4" />
+
+                <path d="M230 375 C350 315 670 315 793 375" stroke="rgba(255,255,255,0.30)" stroke-width="22" stroke-linecap="round" fill="none" opacity="${glossyOpacity}" />
+            </g>
+        `;
+    } else {
+        body = `
+            <g filter="url(#softShadow)">
+                <ellipse cx="512" cy="500" rx="390" ry="220" fill="url(#genericBase)" />
+                <ellipse cx="512" cy="500" rx="390" ry="220" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="500" rx="389" ry="219" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
+                <ellipse cx="512" cy="500" rx="372" ry="204" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="4" />
+                <path d="M230 375 C350 315 670 315 793 375" stroke="rgba(255,255,255,0.32)" stroke-width="24" stroke-linecap="round" fill="none" opacity="${glossyOpacity}" />
+            </g>
+        `;
+    }
+
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+    <defs>
+        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="rgba(0,0,0,0.22)" />
+        </filter>
+
+        <filter id="blurGlow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="35" />
+        </filter>
+
+        <radialGradient id="genericBase" cx="38%" cy="28%" r="75%">
+            <stop offset="0%" stop-color="${ledGlow ? "#fff2c9" : "#f5f5f5"}" />
+            <stop offset="45%" stop-color="${ledGlow ? "#ffd980" : "#ff7a18"}" />
+            <stop offset="100%" stop-color="${ledGlow ? "#c98518" : "#b84300"}" />
+        </radialGradient>
+
+        <radialGradient id="burgerBase" cx="38%" cy="26%" r="78%">
+            <stop offset="0%" stop-color="#f6d7a4" />
+            <stop offset="45%" stop-color="#d89043" />
+            <stop offset="100%" stop-color="#8f4d19" />
+        </radialGradient>
+
+        <linearGradient id="bunTop" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f0c177" />
+            <stop offset="100%" stop-color="#b86b24" />
+        </linearGradient>
+
+        <linearGradient id="bunBottom" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#d58b42" />
+            <stop offset="100%" stop-color="#9f541a" />
+        </linearGradient>
+
+        <linearGradient id="tomatoBand" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#b31d1a" />
+            <stop offset="45%" stop-color="#f05a38" />
+            <stop offset="100%" stop-color="#921516" />
+        </linearGradient>
+
+        <linearGradient id="lettuceBand" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#3d8d2c" />
+            <stop offset="45%" stop-color="#9ece3d" />
+            <stop offset="100%" stop-color="#2f7124" />
+        </linearGradient>
+
+        <linearGradient id="pattyBand" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#4e2315" />
+            <stop offset="45%" stop-color="#7a3b22" />
+            <stop offset="100%" stop-color="#32140d" />
+        </linearGradient>
+
+        <linearGradient id="cheeseBand" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#f7c928" />
+            <stop offset="45%" stop-color="#ffe06a" />
+            <stop offset="100%" stop-color="#d99205" />
+        </linearGradient>
+
+        <radialGradient id="surfaceGloss" cx="35%" cy="20%" r="70%">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.85)" />
+            <stop offset="32%" stop-color="rgba(255,255,255,0.28)" />
+            <stop offset="70%" stop-color="rgba(255,255,255,0.04)" />
+            <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+        </radialGradient>
+    </defs>
+
+    <g opacity="${globalBrightness}">
+        ${bgGlow}
+        ${body}
+    </g>
+</svg>
+`.trim();
+
+    return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
 }
 
 export default function Page() {
@@ -367,6 +448,19 @@ export default function Page() {
         setLoading(true);
         setError(null);
         setOverlayUrl(null);
+
+        if (shapeDetail <= 10) {
+            const proceduralUrl = makeProceduralInflatableSvgDataUrl({
+                prompt: subjectPrompt,
+                productType: selectedProductType,
+                material,
+                lighting,
+            });
+
+            setOverlayUrl(proceduralUrl);
+            setLoading(false);
+            return;
+        }
 
         try {
             const response = await fetch("/api/generate", {
@@ -940,8 +1034,8 @@ export default function Page() {
                             />
 
                             <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                Markerul reprezintă punctul de sprijin al obiectului,
-                                nu centrul. Obiectul generat se așază cu baza pe marker.
+                                0–10% = formă procedurală simplă, nu AI. Markerul
+                                este punctul de sprijin al obiectului.
                             </div>
                         </div>
                     </section>
@@ -954,148 +1048,41 @@ export default function Page() {
                         <div className="aztec-section-content">
                             <div className="aztec-section-line" />
 
-                            <div className="aztec-slider-header">
-                                <div className="aztec-label">Umbră X</div>
-                                <div className="aztec-slider-value">{shadowX}%</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={-40}
-                                max={40}
-                                value={shadowX}
-                                onChange={(e) => setShadowX(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Umbră Y</div>
-                                <div className="aztec-slider-value">{shadowY}%</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={-40}
-                                max={60}
-                                value={shadowY}
-                                onChange={(e) => setShadowY(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Lățime umbră</div>
-                                <div className="aztec-slider-value">{shadowScaleX}%</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={10}
-                                max={180}
-                                value={shadowScaleX}
-                                onChange={(e) => setShadowScaleX(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Înălțime umbră</div>
-                                <div className="aztec-slider-value">{shadowScaleY}%</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={2}
-                                max={100}
-                                value={shadowScaleY}
-                                onChange={(e) => setShadowScaleY(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Blur umbră</div>
-                                <div className="aztec-slider-value">{shadowBlur}px</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={0}
-                                max={50}
-                                value={shadowBlur}
-                                onChange={(e) => setShadowBlur(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Opacitate umbră</div>
-                                <div className="aztec-slider-value">{shadowOpacity}%</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={0}
-                                max={90}
-                                value={shadowOpacity}
-                                onChange={(e) => setShadowOpacity(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Skew umbră</div>
-                                <div className="aztec-slider-value">{shadowSkew}°</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={-45}
-                                max={45}
-                                value={shadowSkew}
-                                onChange={(e) => setShadowSkew(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Brightness obiect</div>
-                                <div className="aztec-slider-value">{objectBrightness}%</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={40}
-                                max={160}
-                                value={objectBrightness}
-                                onChange={(e) => setObjectBrightness(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Contrast obiect</div>
-                                <div className="aztec-slider-value">{objectContrast}%</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={40}
-                                max={180}
-                                value={objectContrast}
-                                onChange={(e) => setObjectContrast(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Temperatură obiect</div>
-                                <div className="aztec-slider-value">{objectWarmth}</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={-60}
-                                max={80}
-                                value={objectWarmth}
-                                onChange={(e) => setObjectWarmth(Number(e.target.value))}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Opacitate obiect</div>
-                                <div className="aztec-slider-value">{objectOpacity}%</div>
-                            </div>
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={10}
-                                max={100}
-                                value={objectOpacity}
-                                onChange={(e) => setObjectOpacity(Number(e.target.value))}
-                            />
+                            {[
+                                ["Umbră X", shadowX, setShadowX, -40, 40, "%"],
+                                ["Umbră Y", shadowY, setShadowY, -40, 60, "%"],
+                                ["Lățime umbră", shadowScaleX, setShadowScaleX, 10, 180, "%"],
+                                ["Înălțime umbră", shadowScaleY, setShadowScaleY, 2, 100, "%"],
+                                ["Blur umbră", shadowBlur, setShadowBlur, 0, 50, "px"],
+                                ["Opacitate umbră", shadowOpacity, setShadowOpacity, 0, 90, "%"],
+                                ["Skew umbră", shadowSkew, setShadowSkew, -45, 45, "°"],
+                                ["Brightness obiect", objectBrightness, setObjectBrightness, 40, 160, "%"],
+                                ["Contrast obiect", objectContrast, setObjectContrast, 40, 180, "%"],
+                                ["Temperatură obiect", objectWarmth, setObjectWarmth, -60, 80, ""],
+                                ["Opacitate obiect", objectOpacity, setObjectOpacity, 10, 100, "%"],
+                            ].map(([label, value, setter, min, max, unit]) => (
+                                <div key={String(label)} style={{ marginTop: 14 }}>
+                                    <div className="aztec-slider-header">
+                                        <div className="aztec-label">{label as string}</div>
+                                        <div className="aztec-slider-value">
+                                            {value as number}
+                                            {unit as string}
+                                        </div>
+                                    </div>
+                                    <input
+                                        className="aztec-slider"
+                                        type="range"
+                                        min={min as number}
+                                        max={max as number}
+                                        value={value as number}
+                                        onChange={(e) =>
+                                            (setter as React.Dispatch<React.SetStateAction<number>>)(
+                                                Number(e.target.value)
+                                            )
+                                        }
+                                    />
+                                </div>
+                            ))}
                         </div>
                     </section>
 
