@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 
 type GenerateMode = "rapid" | "photo" | "replica";
+
 type MaterialMode =
     | "PVC lucios"
     | "PVC mat"
@@ -89,50 +90,83 @@ function cleanUserPrompt(value: string) {
         .trim();
 }
 
-function getShadowStyle(
-    placementMode: PlacementMode,
-    posX: number,
-    posY: number,
-    overlayScale: number
-) {
+function getObjectFilter(lighting: string, material: MaterialMode) {
+    if (lighting === "Noapte") {
+        if (material === "LED interior" || material === "Alb translucid") {
+            return "brightness(0.92) contrast(1.08) saturate(1.18) drop-shadow(0 0 18px rgba(255,230,170,0.42)) drop-shadow(0 0 38px rgba(255,150,40,0.26))";
+        }
+
+        return "brightness(0.72) contrast(1.12) saturate(0.9) drop-shadow(0 0 12px rgba(120,170,255,0.16))";
+    }
+
+    if (lighting === "Golden hour") {
+        return "brightness(1.04) contrast(1.05) saturate(1.12) sepia(0.15) hue-rotate(-7deg) drop-shadow(10px 16px 18px rgba(0,0,0,0.22))";
+    }
+
+    if (lighting === "Interior") {
+        return "brightness(0.96) contrast(1.03) saturate(0.92) drop-shadow(0 12px 18px rgba(0,0,0,0.20))";
+    }
+
+    return "brightness(1) contrast(1.03) saturate(1.04) drop-shadow(0 10px 16px rgba(0,0,0,0.16))";
+}
+
+function getDefaultShadowSettings(placementMode: PlacementMode) {
     if (placementMode === "Pe fațadă") {
         return {
-            left: `${posX + 2}%`,
-            top: `${posY - overlayScale * 0.28}%`,
-            width: `${overlayScale * 0.88}%`,
-            height: `${overlayScale * 0.52}%`,
-            transform: "translate(-50%, -50%)",
-            background:
-                "radial-gradient(ellipse at center, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.16) 42%, rgba(0,0,0,0.04) 68%, rgba(0,0,0,0) 78%)",
-            filter: "blur(12px)",
-            opacity: 0.72,
+            x: 4,
+            y: 4,
+            scaleX: 78,
+            scaleY: 62,
+            blur: 18,
+            opacity: 32,
+            skew: 0,
         };
     }
 
     if (placementMode === "Suspendat") {
         return {
-            left: `${posX}%`,
-            top: `${posY + overlayScale * 0.08}%`,
-            width: `${overlayScale * 0.7}%`,
-            height: `${overlayScale * 0.11}%`,
-            transform: "translate(-50%, -50%)",
-            background:
-                "radial-gradient(ellipse at center, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.09) 46%, rgba(0,0,0,0.02) 70%, rgba(0,0,0,0) 82%)",
-            filter: "blur(14px)",
-            opacity: 0.55,
+            x: 0,
+            y: 24,
+            scaleX: 70,
+            scaleY: 12,
+            blur: 24,
+            opacity: 20,
+            skew: 0,
+        };
+    }
+
+    if (placementMode === "Pe acoperiș") {
+        return {
+            x: 4,
+            y: 2,
+            scaleX: 86,
+            scaleY: 16,
+            blur: 18,
+            opacity: 34,
+            skew: -8,
+        };
+    }
+
+    if (placementMode === "În interior") {
+        return {
+            x: 2,
+            y: 3,
+            scaleX: 82,
+            scaleY: 15,
+            blur: 16,
+            opacity: 28,
+            skew: 0,
         };
     }
 
     return {
-        left: `${posX}%`,
-        top: `${posY}%`,
-        width: `${overlayScale * 0.82}%`,
-        height: `${overlayScale * 0.13}%`,
-        transform: "translate(-50%, -50%)",
-        background:
-            "radial-gradient(ellipse at center, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.22) 42%, rgba(0,0,0,0.05) 68%, rgba(0,0,0,0) 80%)",
-        filter: "blur(10px)",
-        opacity: 0.82,
+        x: 3,
+        y: 2,
+        scaleX: 84,
+        scaleY: 15,
+        blur: 16,
+        opacity: 36,
+        skew: -6,
     };
 }
 
@@ -175,11 +209,32 @@ export default function Page() {
     const [overlayScale, setOverlayScale] = useState(32);
     const [rotation, setRotation] = useState(0);
 
+    const defaultShadow = getDefaultShadowSettings(placementMode);
+    const [shadowX, setShadowX] = useState(defaultShadow.x);
+    const [shadowY, setShadowY] = useState(defaultShadow.y);
+    const [shadowScaleX, setShadowScaleX] = useState(defaultShadow.scaleX);
+    const [shadowScaleY, setShadowScaleY] = useState(defaultShadow.scaleY);
+    const [shadowBlur, setShadowBlur] = useState(defaultShadow.blur);
+    const [shadowOpacity, setShadowOpacity] = useState(defaultShadow.opacity);
+    const [shadowSkew, setShadowSkew] = useState(defaultShadow.skew);
+
+    const [objectBrightness, setObjectBrightness] = useState(100);
+    const [objectContrast, setObjectContrast] = useState(100);
+    const [objectWarmth, setObjectWarmth] = useState(0);
+    const [objectOpacity, setObjectOpacity] = useState(100);
+
     const previewRef = useRef<HTMLDivElement | null>(null);
 
     const subjectPrompt = cleanUserPrompt(userPrompt) || userPrompt.trim();
     const fullPrompt = `${subjectPrompt}. ${PRODUCT_PRESETS[selectedProductType]}`;
-    const shadowStyle = getShadowStyle(placementMode, posX, posY, overlayScale);
+
+    const objectFilter = `
+        ${getObjectFilter(lighting, material)}
+        brightness(${objectBrightness}%)
+        contrast(${objectContrast}%)
+        sepia(${Math.max(0, objectWarmth) / 100})
+        hue-rotate(${objectWarmth < 0 ? objectWarmth : -objectWarmth * 0.12}deg)
+    `;
 
     const fileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -193,6 +248,18 @@ export default function Page() {
             reader.onerror = reject;
             reader.readAsDataURL(file);
         });
+    };
+
+    const resetShadowForPlacement = (mode: PlacementMode) => {
+        const next = getDefaultShadowSettings(mode);
+
+        setShadowX(next.x);
+        setShadowY(next.y);
+        setShadowScaleX(next.scaleX);
+        setShadowScaleY(next.scaleY);
+        setShadowBlur(next.blur);
+        setShadowOpacity(next.opacity);
+        setShadowSkew(next.skew);
     };
 
     const handleSceneUpload = async (
@@ -492,7 +559,9 @@ export default function Page() {
                                 className="aztec-select"
                                 value={placementMode}
                                 onChange={(e) => {
-                                    setPlacementMode(e.target.value as PlacementMode);
+                                    const next = e.target.value as PlacementMode;
+                                    setPlacementMode(next);
+                                    resetShadowForPlacement(next);
                                     setOverlayUrl(null);
                                 }}
                             >
@@ -723,6 +792,32 @@ export default function Page() {
                                 onChange={(e) => {
                                     setLighting(e.target.value);
                                     setOverlayUrl(null);
+
+                                    if (e.target.value === "Noapte") {
+                                        setObjectBrightness(78);
+                                        setObjectContrast(112);
+                                        setObjectWarmth(-10);
+                                        setShadowOpacity(48);
+                                        setShadowBlur(22);
+                                    } else if (e.target.value === "Golden hour") {
+                                        setObjectBrightness(104);
+                                        setObjectContrast(106);
+                                        setObjectWarmth(30);
+                                        setShadowOpacity(36);
+                                        setShadowBlur(18);
+                                    } else if (e.target.value === "Interior") {
+                                        setObjectBrightness(94);
+                                        setObjectContrast(102);
+                                        setObjectWarmth(5);
+                                        setShadowOpacity(30);
+                                        setShadowBlur(18);
+                                    } else {
+                                        setObjectBrightness(100);
+                                        setObjectContrast(100);
+                                        setObjectWarmth(0);
+                                        setShadowOpacity(36);
+                                        setShadowBlur(16);
+                                    }
                                 }}
                             >
                                 <option>Zi</option>
@@ -851,6 +946,159 @@ export default function Page() {
                         </div>
                     </section>
 
+                    <section className="aztec-section">
+                        <div className="aztec-section-button aztec-section-button-active">
+                            8. UMBRĂ & INTEGRARE
+                        </div>
+
+                        <div className="aztec-section-content">
+                            <div className="aztec-section-line" />
+
+                            <div className="aztec-slider-header">
+                                <div className="aztec-label">Umbră X</div>
+                                <div className="aztec-slider-value">{shadowX}%</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={-40}
+                                max={40}
+                                value={shadowX}
+                                onChange={(e) => setShadowX(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Umbră Y</div>
+                                <div className="aztec-slider-value">{shadowY}%</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={-40}
+                                max={60}
+                                value={shadowY}
+                                onChange={(e) => setShadowY(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Lățime umbră</div>
+                                <div className="aztec-slider-value">{shadowScaleX}%</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={10}
+                                max={180}
+                                value={shadowScaleX}
+                                onChange={(e) => setShadowScaleX(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Înălțime umbră</div>
+                                <div className="aztec-slider-value">{shadowScaleY}%</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={2}
+                                max={100}
+                                value={shadowScaleY}
+                                onChange={(e) => setShadowScaleY(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Blur umbră</div>
+                                <div className="aztec-slider-value">{shadowBlur}px</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={0}
+                                max={50}
+                                value={shadowBlur}
+                                onChange={(e) => setShadowBlur(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Opacitate umbră</div>
+                                <div className="aztec-slider-value">{shadowOpacity}%</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={0}
+                                max={90}
+                                value={shadowOpacity}
+                                onChange={(e) => setShadowOpacity(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Skew umbră</div>
+                                <div className="aztec-slider-value">{shadowSkew}°</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={-45}
+                                max={45}
+                                value={shadowSkew}
+                                onChange={(e) => setShadowSkew(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Brightness obiect</div>
+                                <div className="aztec-slider-value">{objectBrightness}%</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={40}
+                                max={160}
+                                value={objectBrightness}
+                                onChange={(e) => setObjectBrightness(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Contrast obiect</div>
+                                <div className="aztec-slider-value">{objectContrast}%</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={40}
+                                max={180}
+                                value={objectContrast}
+                                onChange={(e) => setObjectContrast(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Temperatură obiect</div>
+                                <div className="aztec-slider-value">{objectWarmth}</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={-60}
+                                max={80}
+                                value={objectWarmth}
+                                onChange={(e) => setObjectWarmth(Number(e.target.value))}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Opacitate obiect</div>
+                                <div className="aztec-slider-value">{objectOpacity}%</div>
+                            </div>
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={10}
+                                max={100}
+                                value={objectOpacity}
+                                onChange={(e) => setObjectOpacity(Number(e.target.value))}
+                            />
+                        </div>
+                    </section>
+
                     {error && <div className="aztec-error-box">{error}</div>}
 
                     <button
@@ -970,12 +1218,21 @@ export default function Page() {
                     {overlayUrl && (
                         <>
                             <div
-                                className="aztec-overlay-shadow"
                                 style={{
                                     position: "absolute",
+                                    left: `calc(${posX}% + ${shadowX}px)`,
+                                    top: `calc(${posY}% + ${shadowY}px)`,
+                                    width: `${overlayScale * (shadowScaleX / 100)}%`,
+                                    height: `${overlayScale * (shadowScaleY / 100)}%`,
+                                    transform: `translate(-50%, -50%) skewX(${shadowSkew}deg)`,
+                                    transformOrigin: "50% 50%",
+                                    background:
+                                        "radial-gradient(ellipse at center, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.42) 34%, rgba(0,0,0,0.16) 58%, rgba(0,0,0,0.04) 76%, rgba(0,0,0,0) 88%)",
+                                    filter: `blur(${shadowBlur}px)`,
+                                    opacity: shadowOpacity / 100,
                                     zIndex: 2,
                                     pointerEvents: "none",
-                                    ...shadowStyle,
+                                    mixBlendMode: "multiply",
                                 }}
                             />
 
@@ -993,6 +1250,8 @@ export default function Page() {
                                     zIndex: 3,
                                     pointerEvents: "none",
                                     userSelect: "none",
+                                    filter: objectFilter,
+                                    opacity: objectOpacity / 100,
                                 }}
                             />
                         </>
