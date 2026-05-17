@@ -6,6 +6,14 @@ export const maxDuration = 60;
 type GenerateMode = "rapid" | "photo" | "replica";
 type RenderPipeline = "overlay" | "inpaint";
 
+type ResolvedIntent = {
+    subject: string;
+    productType: string;
+    productPreset: string;
+    subjectLock: string;
+    negativeLock: string;
+};
+
 type RequestBody = {
     sceneImage?: string;
     maskImage?: string | null;
@@ -77,52 +85,331 @@ function normalizeText(value?: string) {
     return String(value || "")
         .toLowerCase()
         .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/ă/g, "a")
+        .replace(/â/g, "a")
+        .replace(/î/g, "i")
+        .replace(/ș/g, "s")
+        .replace(/ş/g, "s")
+        .replace(/ț/g, "t")
+        .replace(/ţ/g, "t");
 }
 
-function isFoodSubject(text: string) {
+function containsAny(text: string, terms: string[]) {
     const t = normalizeText(text);
-
-    return (
-        t.includes("burger") ||
-        t.includes("hamburger") ||
-        t.includes("sandwich") ||
-        t.includes("hotdog") ||
-        t.includes("pizza") ||
-        t.includes("mancare") ||
-        t.includes("food")
-    );
+    return terms.some((term) => t.includes(normalizeText(term)));
 }
 
-function isBurgerSubject(text: string) {
-    const t = normalizeText(text);
-    return t.includes("burger") || t.includes("hamburger");
+function cleanSubject(value: string) {
+    return String(value || "")
+        .replace(/\s+/g, " ")
+        .replace(/\s+,/g, ",")
+        .replace(/,+/g, ",")
+        .trim();
 }
 
-function getEffectiveProductData(options: {
+function isExplicitArchitectureObject(text: string) {
+    return containsAny(text, [
+        "arcada",
+        "arch",
+        "tunel",
+        "tunnel",
+        "cort",
+        "tent",
+        "cupola",
+        "dome",
+        "poarta",
+        "portal",
+        "intrare",
+        "stand",
+        "pavilion",
+    ]);
+}
+
+function isExplicitProductReplica(text: string) {
+    return containsAny(text, [
+        "sticla",
+        "bottle",
+        "doza",
+        "can",
+        "cutie",
+        "box",
+        "produs",
+        "ambalaj",
+        "pahar",
+        "cup",
+        "tub",
+        "flacon",
+        "recipient",
+    ]);
+}
+
+function isExplicitFoodObject(text: string) {
+    return containsAny(text, [
+        "burger",
+        "hamburger",
+        "sandwich",
+        "hotdog",
+        "pizza",
+        "cartof",
+        "inghetata",
+        "ice cream",
+        "shaorma",
+        "kebab",
+        "gogoasa",
+        "donut",
+        "cafea",
+        "coffee",
+        "mancare",
+        "food",
+        "fruct",
+        "mar",
+        "banana",
+        "capsuna",
+    ]);
+}
+
+function isExplicitCharacterOrAnimal(text: string) {
+    return containsAny(text, [
+        "pinguin",
+        "penguin",
+        "catel",
+        "caine",
+        "dog",
+        "pisica",
+        "cat",
+        "urs",
+        "bear",
+        "iepure",
+        "rabbit",
+        "leu",
+        "lion",
+        "tigru",
+        "tiger",
+        "elefant",
+        "elephant",
+        "dinozaur",
+        "dinosaur",
+        "dragon",
+        "mascota",
+        "mascot",
+        "personaj",
+        "character",
+        "om",
+        "human",
+        "robot",
+        "monstru",
+        "monster",
+        "animal",
+    ]);
+}
+
+function resolveInflatableIntent(options: {
     userPrompt: string;
-    productType: string;
-    productPreset: string;
+    selectedProductType: string;
+    selectedProductPreset: string;
 }) {
-    const combined = normalizeText(
-        `${options.userPrompt} ${options.productType} ${options.productPreset}`
-    );
+    const rawSubject = cleanSubject(options.userPrompt || "");
+    const normalizedSubject = normalizeText(rawSubject);
+    const selectedType = options.selectedProductType || "Custom";
 
-    if (combined.includes("burger") || combined.includes("hamburger")) {
+    const hasExplicitArchitecture = isExplicitArchitectureObject(rawSubject);
+    const hasExplicitProduct = isExplicitProductReplica(rawSubject);
+    const hasExplicitFood = isExplicitFoodObject(rawSubject);
+    const hasExplicitCharacter = isExplicitCharacterOrAnimal(rawSubject);
+
+    if (containsAny(rawSubject, ["arcada", "arch", "poarta", "portal", "intrare"])) {
         return {
-            productType: "Hamburger",
+            subject: rawSubject || "arcadă gonflabilă",
+            productType: "Arcadă",
             productPreset:
-                "Hamburger gonflabil publicitar, volum rotunjit, recognoscibil ca hamburger, realizabil în PVC lucios, cu formă simplificată și benzi late imprimate pentru ingrediente.",
+                "Arcadă gonflabilă publicitară premium, cu două picioare verticale stabile și traversă superioară rotunjită, proporții realiste, PVC lucios, construcție fabricabilă.",
             subjectLock:
-                "The requested object is strictly a giant inflatable hamburger. Do not generate a mascot, face, cat, mask, helmet, animal, character or abstract white shape.",
+                "The main subject is an inflatable arch / entrance structure. Do not generate a mascot, animal, face, food object or unrelated character.",
+            negativeLock:
+                "mascot, animal, face, cat, dog, penguin, burger, food, bottle, ordinary sculpture, unrelated character",
+        };
+    }
+
+    if (containsAny(rawSubject, ["tunel", "tunnel"])) {
+        return {
+            subject: rawSubject || "tunel gonflabil",
+            productType: "Tunel",
+            productPreset:
+                "Tunel gonflabil mare pentru evenimente sportive, structură lungă, intrare rotunjită, PVC lucios, stabil pe sol.",
+            subjectLock:
+                "The main subject is an inflatable tunnel. Do not generate a mascot, animal, face, food object, bottle or unrelated object.",
+            negativeLock:
+                "mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
+        };
+    }
+
+    if (containsAny(rawSubject, ["cort", "tent", "pavilion"])) {
+        return {
+            subject: rawSubject || "cort gonflabil",
+            productType: "Cort",
+            productPreset:
+                "Cort gonflabil pentru eveniment, structură tubulară gonflabilă, acoperiș moale, proporții realiste, aspect premium.",
+            subjectLock:
+                "The main subject is an inflatable event tent / pavilion. Do not generate a mascot, animal, food object, bottle, face or unrelated character.",
+            negativeLock:
+                "mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
+        };
+    }
+
+    if (containsAny(rawSubject, ["cupola", "dome"])) {
+        return {
+            subject: rawSubject || "cupolă gonflabilă",
+            productType: "Cupolă",
+            productPreset:
+                "Cupolă gonflabilă pentru eveniment, volum mare rotunjit, structură stabilă, material PVC rezistent outdoor, aspect premium.",
+            subjectLock:
+                "The main subject is an inflatable dome. Do not generate a mascot, animal, food object, bottle, face or unrelated character.",
+            negativeLock:
+                "mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
+        };
+    }
+
+    if (hasExplicitProduct) {
+        return {
+            subject: rawSubject || "replică gonflabilă de produs",
+            productType: "Replică produs",
+            productPreset:
+                "Replică gonflabilă de produs, proporții recognoscibile, volum moale, PVC lucios, formă simplificată și fabricabilă.",
+            subjectLock:
+                `The main subject is strictly this inflatable product replica: ${rawSubject}. Do not replace it with a mascot, animal, face, mask, food object or unrelated character.`,
+            negativeLock:
+                "mascot, animal, face, cat, dog, penguin, mask, helmet, unrelated character, unrelated food",
+        };
+    }
+
+    if (hasExplicitFood) {
+        return {
+            subject: rawSubject || "obiect alimentar gonflabil",
+            productType: "Replică food",
+            productPreset:
+                "Replică gonflabilă publicitară a unui produs alimentar, recognoscibilă, realizabilă în PVC lucios, cu formă simplificată și zone late imprimate pentru detalii.",
+            subjectLock:
+                `The main subject is strictly this inflatable food/product replica: ${rawSubject}. Do not generate a mascot, animal, face, mask, helmet, cat, dog, penguin or unrelated character.`,
+            negativeLock:
+                "mascot, animal, face, cat, dog, penguin, mask, helmet, character, ordinary mascot, person, unrelated object",
+        };
+    }
+
+    if (hasExplicitCharacter) {
+        return {
+            subject: rawSubject || "mascotă gonflabilă",
+            productType: "Mascotă",
+            productPreset:
+                `Mascotă gonflabilă mare reprezentând clar subiectul cerut: ${rawSubject}. Volum rotunjit, expresiv, stabil, realizabil în PVC gonflabil, formă simplificată dar recognoscibilă.`,
+            subjectLock:
+                `The main subject is strictly this inflatable mascot / character: ${rawSubject}. Do not replace it with a different animal, food object, arch, tunnel, bottle, mask or unrelated object.`,
+            negativeLock:
+                "wrong animal, wrong character, burger, food, bottle, arch, tunnel, tent, dome, unrelated object, theater mask, helmet",
+        };
+    }
+
+    if (rawSubject.length >= 2) {
+        return {
+            subject: rawSubject,
+            productType: "Custom",
+            productPreset:
+                `Obiect gonflabil personalizat reprezentând clar subiectul cerut: ${rawSubject}. Formă stabilă, material PVC profesional, volum rotunjit, fabricabil și recognoscibil.`,
+            subjectLock:
+                `The main subject is strictly the written user request: ${rawSubject}. The selected UI category is secondary. Do not replace it with another object type.`,
+            negativeLock:
+                "wrong subject, unrelated object, mascot if not requested, animal if not requested, food if not requested, arch if not requested, bottle if not requested",
+        };
+    }
+
+    if (selectedType === "Arcadă") {
+        return {
+            subject: "arcadă gonflabilă",
+            productType: "Arcadă",
+            productPreset:
+                "Arcadă gonflabilă publicitară premium, cu două picioare verticale stabile și traversă superioară rotunjită, proporții realiste, PVC lucios, construcție fabricabilă.",
+            subjectLock:
+                "The main subject is an inflatable arch. Do not generate another object type.",
+            negativeLock:
+                "mascot, animal, food, bottle, face, mask, unrelated object",
+        };
+    }
+
+    if (selectedType === "Mascotă") {
+        return {
+            subject: "mascotă gonflabilă",
+            productType: "Mascotă",
+            productPreset:
+                "Mascotă gonflabilă mare, volum rotunjit, expresivă, stabilă, realizabilă în PVC gonflabil, formă simplificată dar recognoscibilă.",
+            subjectLock:
+                "The main subject is an inflatable mascot. Do not generate an arch, tunnel, bottle or unrelated object.",
+            negativeLock:
+                "arch, tunnel, bottle, tent, dome, unrelated object",
+        };
+    }
+
+    if (selectedType === "Cupolă") {
+        return {
+            subject: "cupolă gonflabilă",
+            productType: "Cupolă",
+            productPreset:
+                "Cupolă gonflabilă pentru eveniment, volum mare rotunjit, structură stabilă, material PVC rezistent outdoor, aspect premium.",
+            subjectLock:
+                "The main subject is an inflatable dome. Do not generate another object type.",
+            negativeLock:
+                "mascot, animal, food, bottle, face, mask, unrelated object",
+        };
+    }
+
+    if (selectedType === "Cort") {
+        return {
+            subject: "cort gonflabil",
+            productType: "Cort",
+            productPreset:
+                "Cort gonflabil pentru eveniment, structură tubulară gonflabilă, acoperiș moale, proporții realiste, aspect premium.",
+            subjectLock:
+                "The main subject is an inflatable event tent. Do not generate another object type.",
+            negativeLock:
+                "mascot, animal, food, bottle, face, mask, unrelated object",
+        };
+    }
+
+    if (selectedType === "Tunel") {
+        return {
+            subject: "tunel gonflabil",
+            productType: "Tunel",
+            productPreset:
+                "Tunel gonflabil mare pentru evenimente sportive, structură lungă, intrare rotunjită, PVC lucios, stabil pe sol.",
+            subjectLock:
+                "The main subject is an inflatable tunnel. Do not generate another object type.",
+            negativeLock:
+                "mascot, animal, food, bottle, face, mask, unrelated object",
+        };
+    }
+
+    if (selectedType === "Sticlă") {
+        return {
+            subject: "sticlă gonflabilă",
+            productType: "Sticlă",
+            productPreset:
+                "Replică gonflabilă de produs în formă de sticlă, proporții recognoscibile, volum moale, PVC lucios, fabricabilă.",
+            subjectLock:
+                "The main subject is an inflatable bottle / product replica. Do not generate another object type.",
+            negativeLock:
+                "mascot, animal, food, arch, tunnel, face, mask, unrelated object",
         };
     }
 
     return {
-        productType: options.productType,
-        productPreset: options.productPreset,
+        subject: rawSubject || "obiect gonflabil personalizat",
+        productType: "Custom",
+        productPreset:
+            options.selectedProductPreset ||
+            "Obiect gonflabil personalizat, realist, fabricabil, cu formă stabilă, material PVC profesional și proporții comerciale.",
         subjectLock:
-            "The generated object must follow the written user request and the selected inflatable product type.",
+            "The generated object must follow the written user request. The UI category is only secondary.",
+        negativeLock:
+            "wrong subject, unrelated object, random mascot, random animal, random face, random mask",
     };
 }
 
@@ -148,7 +435,7 @@ function shouldUseReferenceAsInitImage(options: {
     const combined = `${productType || ""} ${userPrompt || ""}`;
 
     if (shapeDetail <= 50) return false;
-    if (isFoodSubject(combined) && respectReference < 97) return false;
+    if (isExplicitFoodObject(combined) && respectReference < 97) return false;
 
     if (generateMode === "replica" && respectReference >= 90 && shapeDetail >= 65) {
         return true;
@@ -162,214 +449,72 @@ function shouldUseReferenceAsInitImage(options: {
 }
 
 function getProductTypePrompt(
-    productType?: string,
-    userPrompt?: string,
+    intent: ResolvedIntent,
     shapeDetail = 35,
     pipeline: RenderPipeline = "overlay"
 ) {
-    const base = normalizeText(`${productType || ""} ${userPrompt || ""}`);
+    const subject = intent.subject;
+    const productType = intent.productType;
+    const lowDetail = shapeDetail <= 15;
+    const mediumDetail = shapeDetail <= 45;
 
-    if (base.includes("burger") || base.includes("hamburger")) {
-        if (pipeline === "inpaint") {
-            if (shapeDetail <= 15) {
-                return `
-PRODUCT TYPE: SIMPLIFIED GIANT INFLATABLE HAMBURGER.
+    if (pipeline === "inpaint") {
+        return `
+PRODUCT TYPE:
+${productType}
 
-Hard subject lock:
-- the object must be a hamburger;
-- not a mascot;
-- not a cat;
-- not a mask;
-- not a face;
-- not an animal;
-- not a helmet;
-- not a character.
+SUBJECT:
+${subject}
+
+STRICT SUBJECT RULE:
+${intent.subjectLock}
 
 Mandatory result:
-- create a clearly recognizable hamburger-shaped inflatable object;
-- use simplified inflated bun volumes;
-- use broad horizontal color bands for patty / cheese / salad / tomato;
-- no tiny lettuce leaves;
-- no edible food material;
-- no hyper-detailed ingredients;
-- no realistic restaurant burger;
-- the hamburger must sit inside the masked area;
-- the bottom of the hamburger must touch the surface;
-- create believable contact shadow directly under the hamburger;
-- make it look like a PVC inflatable advertising object.
-`.trim();
-            }
-
-            if (shapeDetail <= 35) {
-                return `
-PRODUCT TYPE: CLEAN INFLATABLE HAMBURGER REPLICA.
-
-Hard subject lock:
-- the object must be a hamburger;
-- not a mascot, cat, mask, face, animal, helmet or character.
-
-Mandatory result:
-- recognizable hamburger inflatable;
-- simple large inflated bun forms;
-- simplified ingredient bands;
-- limited medium details only;
-- avoid tiny leaf geometry and realistic food texture;
-- use glossy PVC printed surface;
-- generate realistic contact with the scene surface and natural shadow.
-`.trim();
-            }
-
-            return `
-PRODUCT TYPE: GIANT INFLATABLE HAMBURGER PROMOTIONAL REPLICA.
-
-Hard subject lock:
-- the object must be a hamburger;
-- not a mascot, cat, mask, face, animal, helmet or character.
-
-Mandatory result:
-- recognizable hamburger inflatable object;
-- rounded air-filled bun, patty, cheese and salad elements;
-- PVC surface with printed texture;
-- realistic commercial inflatable, not edible food;
-- fabricable simplified geometry;
-- integrated contact shadows and scene lighting.
-`.trim();
-        }
-
-        if (shapeDetail <= 10) {
-            return `
-PRODUCT TYPE: SIMPLE INFLATABLE HAMBURGER SIGN.
-
-Hard subject lock:
-- hamburger only;
-- no mascot;
-- no face;
-- no cat;
-- no mask.
-
-Mandatory low-detail result:
-- simple rounded flattened hamburger inflatable;
-- broad printed horizontal bands;
-- recognizably burger-themed;
-- not a real edible burger.
-`.trim();
-        }
-
-        if (shapeDetail <= 25) {
-            return `
-PRODUCT TYPE: SIMPLE INFLATABLE HAMBURGER PROMOTIONAL SHAPE.
-
-Hard subject lock:
-- hamburger only;
-- no mascot, cat, mask, face or animal.
-
-Mandatory result:
-- one or maximum three large rounded inflatable pillow volumes;
-- clear hamburger identity;
-- broad printed PVC color bands;
-- no detailed lettuce geometry;
-- no detailed meat geometry;
-- no sesame geometry.
-`.trim();
-        }
-
-        return `
-PRODUCT TYPE: GIANT INFLATABLE HAMBURGER PROMOTIONAL REPLICA.
-
-Hard subject lock:
-- hamburger only;
-- no mascot, cat, mask, face or animal.
-
-Mandatory rules:
-- The subject is a hamburger, but the output must be a commercial inflatable object.
-- It must not look like edible food photography.
-- Burger identity should come from broad PVC color zones and inflated simplified forms.
-- Use air-filled soft volumes and a clean rounded silhouette.
-`.trim();
-    }
-
-    if (base.includes("arcad") || base.includes("arch")) {
-        return `
-PRODUCT TYPE: INFLATABLE ARCH.
-
-Mandatory geometry:
-- two vertical inflated legs;
-- one rounded inflated top bridge;
-- clear commercial event arch silhouette;
-- stable base;
-- realistic PVC tube construction.
-`.trim();
-    }
-
-    if (base.includes("mascot") || base.includes("mascota")) {
-        return `
-PRODUCT TYPE: INFLATABLE MASCOT / CHARACTER OBJECT.
-
-Mandatory geometry:
-- simplified readable mascot silhouette;
-- large rounded air-filled forms;
-- stable base;
-- PVC seams only where useful;
-- not a normal realistic rigid object.
-`.trim();
-    }
-
-    if (base.includes("cort") || base.includes("tent")) {
-        return `
-PRODUCT TYPE: INFLATABLE EVENT TENT.
-
-Mandatory geometry:
-- inflated tube frame;
-- stable roof;
-- fabricable commercial tent proportions;
-- no impossible thin elements.
-`.trim();
-    }
-
-    if (base.includes("tunel")) {
-        return `
-PRODUCT TYPE: INFLATABLE TUNNEL.
-
-Mandatory geometry:
-- long inflated tunnel body;
-- rounded entry;
-- stable base;
-- commercial event appearance.
-`.trim();
-    }
-
-    if (base.includes("sticl") || base.includes("bottle")) {
-        return `
-PRODUCT TYPE: INFLATABLE BOTTLE / PRODUCT REPLICA.
-
-Mandatory geometry:
-- recognizable bottle silhouette;
-- soft inflated body;
-- simplified neck and cap;
-- stable base;
-- commercial promotional replica.
-`.trim();
-    }
-
-    if (base.includes("cupol") || base.includes("dome")) {
-        return `
-PRODUCT TYPE: INFLATABLE DOME.
-
-Mandatory geometry:
-- rounded dome volume;
-- stable base perimeter;
-- clean PVC construction.
+- create a commercial inflatable object representing the subject above;
+- keep the object inside the white masked area;
+- preserve the original photograph outside the mask;
+- make the object physically touch the intended surface unless placement is suspended;
+- generate believable local contact shadow;
+- match the camera perspective and lighting of the original photo;
+- use PVC inflatable construction, rounded air-filled volumes and fabricable forms;
+- do not replace the requested subject with a different category;
+${
+    lowDetail
+        ? "- low detail means simplified but still recognizable, not abstract and not a wrong object;"
+        : ""
+}
+${
+    mediumDetail
+        ? "- avoid micro-details, tiny geometry and over-complex surfaces;"
+        : "- allow more recognizable details, but keep everything fabricable as a PVC inflatable;"
+}
 `.trim();
     }
 
     return `
-PRODUCT TYPE: CUSTOM COMMERCIAL INFLATABLE OBJECT.
+PRODUCT TYPE:
+${productType}
 
-Mandatory geometry:
-- manufacturable inflatable form;
-- rounded PVC volumes;
-- stable proportions;
-- believable welded-panel construction.
+SUBJECT:
+${subject}
+
+STRICT SUBJECT RULE:
+${intent.subjectLock}
+
+Mandatory result:
+- generate one clean transparent PNG overlay of the inflatable object;
+- no background;
+- no scene;
+- no people;
+- PVC inflatable construction;
+- rounded air-filled volumes;
+- fabricable commercial inflatable form;
+- do not replace the requested subject with a different object;
+${
+    lowDetail
+        ? "- low detail means simplified but still recognizable, not abstract and not a wrong object;"
+        : ""
+}
 `.trim();
 }
 
@@ -403,7 +548,6 @@ Rules:
 - preserve the original image outside the mask;
 - insert a commercial inflatable object;
 - match scene lighting, perspective and contact shadows;
-- do not create a transparent overlay;
 - generate the final integrated photo.
 `.trim();
     }
@@ -414,7 +558,6 @@ GENERATION MODE: CONTROLLED INFLATABLE REPLICA.
 
 Rules:
 - preserve the requested subject;
-- preserve reference shape only when the detail slider is high enough;
 - convert the result into a real commercial inflatable object;
 - do not generate ordinary real objects;
 - do not generate scenery;
@@ -440,7 +583,7 @@ GENERATION MODE: CLEAN MOCKUP.
 
 Rules:
 - simple geometry;
-- very readable silhouette;
+- readable silhouette;
 - minimal surface detail;
 - commercial mockup style;
 - no scenery or background.
@@ -506,63 +649,30 @@ Use it as product design reference only.`;
 - preserve branding placement only if clearly visible; do not invent random text;`;
         }
 
-        if (pipeline === "inpaint") {
-            if (shapeDetail <= 15) {
-                prompt += `
-- simplify the reference heavily but keep the object recognizable;
+        if (shapeDetail <= 15) {
+            prompt += `
+- simplify heavily but keep the subject recognizable;
 - do not make it abstract;
-- avoid small physical details;
+- avoid tiny physical details;
 - use broad inflated forms and printed PVC color zones;`;
-            } else if (shapeDetail <= 35) {
-                prompt += `
+        } else if (shapeDetail <= 45) {
+            prompt += `
 - preserve main recognizable forms;
 - simplify small details into printed PVC graphics;
 - keep a clean inflatable silhouette;`;
-            } else if (shapeDetail <= 70) {
-                prompt += `
+        } else if (shapeDetail <= 75) {
+            prompt += `
 - preserve recognizable medium details;
 - convert complex details into fabricable PVC panels;`;
-            } else {
-                prompt += `
-- preserve the reference form closely but keep it fabricable as PVC inflatable;`;
-            }
         } else {
-            if (shapeDetail <= 10) {
-                prompt += `
-- keep only broad subject identity;
-- physical reference details must be simplified;
-- reference colors may become broad printed bands on the surface;`;
-            } else if (shapeDetail <= 25) {
-                prompt += `
-- simplify the reference into one or a few large rounded inflatable masses;
-- preserve only the main silhouette and major color zones;
-- remove small physical details completely;
-- convert small details into flat printed graphics;`;
-            } else if (shapeDetail <= 45) {
-                prompt += `
-- simplify the reference into clean large inflatable volumes;
-- preserve main recognizable forms;
-- convert small details into printed graphics, not 3D relief;`;
-            } else if (shapeDetail <= 70) {
-                prompt += `
-- preserve main recognizable forms and some medium details;
-- simplify small details into PVC print or broad shapes;`;
-            } else if (shapeDetail <= 90) {
-                prompt += `
-- preserve most of the reference form while converting details into PVC panels and printed graphics;`;
-            } else {
-                prompt += `
-- preserve the reference form closely, but still make it fabricable as a real inflatable object;`;
-            }
+            prompt += `
+- preserve the reference form closely but keep it fabricable as PVC inflatable;`;
         }
-
-        prompt += `
-- always convert the result into a commercial inflatable product.`;
     } else {
         prompt += `
 
 No product reference image was uploaded.
-Generate from the written request and product type.`;
+Generate from the written request and resolved product intent.`;
     }
 
     if (hasTextureImage) {
@@ -582,7 +692,7 @@ function getMaterialPrompt(material: string) {
 MATERIAL:
 Glossy inflatable PVC.
 Smooth air-filled surface, soft specular highlights, flexible pressurized material.
-Texture can be photorealistic as a printed PVC surface, but the geometry must remain soft and inflatable.
+Texture can be photorealistic as printed PVC, but geometry must remain soft and inflatable.
 `.trim();
     }
 
@@ -591,7 +701,6 @@ Texture can be photorealistic as a printed PVC surface, but the geometry must re
 MATERIAL:
 Matte inflatable PVC.
 Soft diffuse reflections, clean professional PVC fabric look.
-Texture can be photorealistic as a printed PVC surface, but the geometry must remain soft and inflatable.
 `.trim();
     }
 
@@ -616,7 +725,7 @@ The object should visibly glow from inside.
         return `
 MATERIAL:
 Heavy-duty outdoor inflatable PVC.
-Reinforced but subtle seams, robust event-grade construction, durable fabric texture.
+Subtle seams, robust event-grade construction, durable fabric texture.
 `.trim();
     }
 
@@ -632,7 +741,7 @@ function getLightingPrompt(lighting: string, material: string, pipeline: RenderP
             return `
 LIGHTING:
 Match a night-composite result.
-If the source photograph is daylight, still make the object visually compatible with the chosen night setting inside the mask, but do not darken the whole original photo.
+If the source photograph is daylight, keep the original photo unchanged outside the mask.
 If material is LED interior or translucent, create soft internal glow and believable local illumination.
 Use realistic contact shadows.
 `.trim();
@@ -650,8 +759,8 @@ Preserve the original photo outside the mask.
         if (lighting === "Interior") {
             return `
 LIGHTING:
-Match indoor style object lighting.
-Soft ambient reflections, realistic contact shadow.
+Match indoor-style object lighting.
+Soft ambient reflections and realistic contact shadow.
 Preserve the original photo outside the mask.
 `.trim();
         }
@@ -668,83 +777,52 @@ Preserve the original photo outside the mask.
     if (lighting === "Noapte") {
         return `
 LIGHTING:
-The object itself must be rendered for NIGHT COMPOSITING.
-Use dark-environment compatible shading.
-Use darker ambient exposure.
-Use stronger rim highlights and controlled specular reflections.
-If material is LED interior or translucent, make it visibly softly illuminated from inside.
-Do not use daylight exposure.
+Render the object for night compositing.
+Use darker ambient exposure, rim highlights and controlled reflections.
+If material is LED interior or translucent, make it softly illuminated from inside.
 `.trim();
     }
 
     if (lighting === "Golden hour") {
         return `
 LIGHTING:
-The object itself must be rendered for GOLDEN HOUR COMPOSITING.
-Use warm amber highlights.
-Use a warm low sun direction.
-Use soft evening reflections.
+Render the object for golden-hour compositing.
+Use warm amber highlights and low sun direction.
 `.trim();
     }
 
     if (lighting === "Interior") {
         return `
 LIGHTING:
-The object itself must be rendered for INTERIOR COMPOSITING.
-Use soft indoor reflections.
-Use controlled ambient lighting.
+Render the object for interior compositing.
+Soft indoor reflections, controlled ambient lighting.
 `.trim();
     }
 
     return `
 LIGHTING:
-The object itself must be rendered for DAYLIGHT COMPOSITING.
-Use natural outdoor daylight.
-Clean neutral exposure.
-Soft realistic object shading.
+Render the object for daylight compositing.
+Use natural outdoor daylight and clean neutral exposure.
 `.trim();
 }
 
-function getShapeDetailPrompt(
-    shapeDetail: number,
-    userPrompt: string,
-    productType: string,
-    pipeline: RenderPipeline
-) {
-    const subject = `${userPrompt} ${productType}`;
-    const burgerLike = isBurgerSubject(subject);
+function getShapeDetailPrompt(shapeDetail: number, intent: ResolvedIntent, pipeline: RenderPipeline) {
+    const subject = intent.subject;
 
     if (pipeline === "inpaint") {
         if (shapeDetail <= 10) {
-            if (burgerLike) {
-                return `
-FORM COMPLEXITY:
-LOW DETAIL BUT CLEARLY RECOGNIZABLE HAMBURGER.
-
-For this hamburger:
-- make it recognizably hamburger-shaped;
-- use simplified inflated bun top and bun bottom;
-- use broad printed bands for filling;
-- no realistic edible texture;
-- no tiny lettuce leaves;
-- no face;
-- no cat;
-- no animal;
-- no mask;
-- no mascot;
-- no character;
-- the object must be a PVC inflatable hamburger sitting on the surface.
-`.trim();
-            }
-
             return `
 FORM COMPLEXITY:
-LOW DETAIL BUT RECOGNIZABLE.
+LOW DETAIL BUT CLEARLY RECOGNIZABLE.
 
-Use large simple inflated forms.
-Avoid small physical details.
-Keep the object identity clear.
-Make it a real PVC inflatable placed naturally in the scene.
+For subject "${subject}":
+- keep the subject readable immediately;
+- simplify into large rounded inflatable volumes;
+- avoid tiny details, micro texture and jagged shapes;
+- do not replace the subject with another object;
+- do not make it abstract;
+- PVC inflatable appearance is mandatory;
+- object must touch the surface naturally.
 `.trim();
         }
 
@@ -753,11 +831,12 @@ Make it a real PVC inflatable placed naturally in the scene.
 FORM COMPLEXITY:
 SIMPLE COMMERCIAL INFLATABLE.
 
-Use clean rounded inflated volumes.
-Keep subject identity clear.
-Use only broad medium details.
-Avoid micro-details and jagged silhouette.
-Generate realistic scene contact and shadows.
+For subject "${subject}":
+- use clean rounded inflated volumes;
+- keep subject identity clear;
+- use only broad medium details;
+- avoid micro-details and noisy edges;
+- create realistic scene contact and shadows.
 `.trim();
         }
 
@@ -766,9 +845,10 @@ Generate realistic scene contact and shadows.
 FORM COMPLEXITY:
 BALANCED INFLATABLE.
 
-Use recognizable details but keep everything fabricable.
-Complex details should become printed PVC graphics or broad inflated panels.
-Natural contact shadow and scene integration are mandatory.
+For subject "${subject}":
+- use recognizable details but keep everything fabricable;
+- complex details should become printed PVC graphics or broad inflated panels;
+- natural contact shadow and scene integration are mandatory.
 `.trim();
         }
 
@@ -777,10 +857,11 @@ Natural contact shadow and scene integration are mandatory.
 FORM COMPLEXITY:
 DETAILED INFLATABLE.
 
-Preserve important subject details.
-Use PVC seams and realistic printed texture.
-Avoid edible/rigid object appearance.
-Integrate perspective and contact shadows.
+For subject "${subject}":
+- preserve important subject details;
+- use PVC seams and realistic printed texture;
+- avoid edible, rigid or sculpture-like appearance unless specifically requested;
+- integrate perspective and contact shadows.
 `.trim();
         }
 
@@ -788,80 +869,57 @@ Integrate perspective and contact shadows.
 FORM COMPLEXITY:
 HIGH DETAIL INFLATABLE REPLICA.
 
-Close recognizable replica while staying PVC-inflatable and manufacturable.
-Use realistic commercial inflatable finish, integrated into the photo.
+For subject "${subject}":
+- close recognizable replica while staying PVC-inflatable and manufacturable;
+- use realistic commercial inflatable finish, integrated into the photo.
 `.trim();
     }
 
-    if (shapeDetail <= 5) {
+    if (shapeDetail <= 10) {
         return `
 FORM COMPLEXITY:
-ABSOLUTE MINIMUM DETAIL.
+LOW DETAIL OVERLAY.
 
-The generated object must look like a simple inflatable advertising balloon with printed texture.
-`.trim();
-    }
-
-    if (shapeDetail <= 15) {
-        return `
-FORM COMPLEXITY:
-ULTRA SIMPLE INFLATABLE SHAPE.
-
-Build the object from one to three large rounded primitive inflatable volumes.
-Use smooth blobs, ellipsoids, capsules and rounded pillow forms.
-The outer silhouette must be simple, clean and rounded.
+For subject "${subject}":
+- simplified but recognizable;
+- one to three large rounded inflatable volumes;
+- no tiny details;
+- no wrong object substitution.
 `.trim();
     }
 
     if (shapeDetail <= 30) {
         return `
 FORM COMPLEXITY:
-VERY SIMPLE INFLATABLE FORM.
+SIMPLE INFLATABLE OVERLAY.
 
-Use large primitive inflated shapes.
-Clear readable silhouette.
-Very few geometry parts.
-Secondary details must be printed, not modeled.
+For subject "${subject}":
+- large primitive inflated shapes;
+- clear readable silhouette;
+- secondary details should be printed, not modeled.
 `.trim();
     }
 
-    if (shapeDetail <= 50) {
+    if (shapeDetail <= 60) {
         return `
 FORM COMPLEXITY:
-SIMPLE COMMERCIAL INFLATABLE FORM.
+BALANCED INFLATABLE OVERLAY.
 
-Use large rounded inflated volumes.
-Preserve subject identity, but simplify secondary details.
-Small details should become printed graphics or simplified soft PVC forms.
-`.trim();
-    }
-
-    if (shapeDetail <= 75) {
-        return `
-FORM COMPLEXITY:
-BALANCED INFLATABLE FORM.
-
-Preserve recognizable subject proportions and medium-size details.
-Convert complex details into fabricable PVC panel logic.
-`.trim();
-    }
-
-    if (shapeDetail <= 90) {
-        return `
-FORM COMPLEXITY:
-DETAILED INFLATABLE FORM.
-
-Preserve most important silhouette details and reference features.
-Use welded PVC panel logic for detail.
+For subject "${subject}":
+- recognizable subject proportions;
+- clean inflatable construction;
+- fabricable PVC panel logic.
 `.trim();
     }
 
     return `
 FORM COMPLEXITY:
-VERY DETAILED INFLATABLE REPLICA.
+DETAILED INFLATABLE OVERLAY.
 
-Preserve the reference shape closely where possible.
-Keep the object manufacturable as PVC inflatable panels.
+For subject "${subject}":
+- preserve important silhouette details;
+- use welded PVC panel logic;
+- keep it manufacturable.
 `.trim();
 }
 
@@ -877,7 +935,7 @@ Width: ${widthM.toFixed(1)} meters.
 Length / depth: ${depthM.toFixed(1)} meters.
 
 Rules:
-- Respect the height / width / length ratio in the generated object.
+- Respect approximate height / width / length ratio.
 - These are product dimensions, not background dimensions.
 `.trim();
 }
@@ -932,49 +990,10 @@ Use indoor-style contact shadow and ambient lighting.
         }
     }
 
-    if (placementMode === "Pe acoperiș") {
-        return `
-PLACEMENT INTENT:
-The object will be composited on a roof.
-Generate it with a clear bottom contact tangent suitable for rooftop placement.
-`.trim();
-    }
-
-    if (placementMode === "Pe sol") {
-        return `
-PLACEMENT INTENT:
-The object will be composited on the ground.
-Generate it with a clear bottom contact tangent.
-`.trim();
-    }
-
-    if (placementMode === "Pe fațadă") {
-        return `
-PLACEMENT INTENT:
-The object will be composited on a vertical facade.
-Generate it as if mounted close to a wall.
-`.trim();
-    }
-
-    if (placementMode === "Suspendat") {
-        return `
-PLACEMENT INTENT:
-The object will be composited as suspended / floating.
-Generate clean object only, without cables unless explicitly requested.
-`.trim();
-    }
-
-    if (placementMode === "În interior") {
-        return `
-PLACEMENT INTENT:
-The object will be composited inside a space.
-Generate clean object only.
-`.trim();
-    }
-
     return `
 PLACEMENT INTENT:
-Generate clean object only, no background.
+${placementMode || "Custom"}.
+Generate clean object only for compositing.
 `.trim();
 }
 
@@ -983,41 +1002,27 @@ function getNegativePrompt(options: {
     respectReference: number;
     shapeDetail: number;
     lighting: string;
-    userPrompt: string;
-    productType: string;
+    intent: ResolvedIntent;
     pipeline: RenderPipeline;
 }) {
-    const {
-        generateMode,
-        respectReference,
-        shapeDetail,
-        lighting,
-        userPrompt,
-        productType,
-        pipeline,
-    } = options;
-
-    const burgerLike = isBurgerSubject(`${userPrompt} ${productType}`);
+    const { generateMode, respectReference, shapeDetail, lighting, intent, pipeline } =
+        options;
 
     let negative = `
-people,
-cars,
-extra objects,
+${intent.negativeLock},
+wrong subject,
 unrelated object,
+extra people,
+extra vehicles,
 watermark,
 random text,
 misspelled text,
 logo artifacts,
-normal real object,
-real food,
-real edible burger,
-food photography,
-wet food texture,
+normal rigid object,
 hard sculpture,
-rigid plastic,
-metal,
 stone,
 wood,
+metal,
 paper,
 cardboard,
 deflated fabric,
@@ -1029,37 +1034,12 @@ deep folds,
 jagged silhouette,
 sharp irregular edge,
 thin protrusions,
-complex cutouts,
 wrong scale,
 bad perspective,
 floating object,
 object not touching surface,
 no contact shadow
 `.trim();
-
-    if (burgerLike) {
-        negative += `,
-cat,
-white cat,
-cat head,
-animal,
-pet,
-mascot,
-face,
-human face,
-mask,
-theater mask,
-helmet,
-character,
-cartoon character,
-blue tube,
-blue cylinder,
-lying object,
-person next to object,
-statue,
-sculpture,
-ordinary mascot`;
-    }
 
     if (pipeline === "overlay") {
         negative += `,
@@ -1085,45 +1065,26 @@ changed pavement outside mask,
 changed vegetation outside mask,
 duplicated architecture,
 distorted facade,
-smearing background`;
+smearing background,
+changing original image outside the mask`;
     }
 
     if (shapeDetail <= 10) {
-        if (burgerLike && pipeline === "inpaint") {
-            negative += `,
-abstract oval,
-unrecognizable food,
+        negative += `,
+unrecognizable subject,
+abstract object,
 plain ball,
 plain sphere,
-real restaurant burger,
-hyper-detailed lettuce,
-tiny sesame seeds,
-tiny ingredient details,
-floating burger,
-no shadow`;
-        } else {
-            negative += `,
 tiny details,
 fine detail,
-complex surface,
-jagged contour,
-thin detail`;
-        }
+complex noisy surface,
+jagged contour`;
     } else if (shapeDetail <= 30) {
         negative += `,
-many small details,
-complex noisy surface,
 overdetailed geometry,
 high frequency detail,
 tiny parts,
 complex topology`;
-    } else if (shapeDetail <= 50) {
-        negative += `,
-overdetailed geometry,
-tiny parts,
-complex topology,
-deep folds,
-noisy silhouette`;
     }
 
     if (lighting === "Noapte") {
@@ -1136,16 +1097,6 @@ bright noon object lighting`;
         negative += `,
 night lighting,
 neon glow`;
-    }
-
-    if (isFoodSubject(`${userPrompt} ${productType}`)) {
-        negative += `,
-ordinary burger,
-real hamburger,
-restaurant food,
-edible food,
-hyperrealistic food photo,
-food macro texture`;
     }
 
     if (generateMode === "replica" || respectReference >= 88) {
@@ -1396,8 +1347,7 @@ export async function POST(req: Request) {
         }
 
         const pipeline: RenderPipeline =
-            renderPipeline ||
-            (generateMode === "rapid" ? "overlay" : "inpaint");
+            renderPipeline || (generateMode === "rapid" ? "overlay" : "inpaint");
 
         if (pipeline === "inpaint" && !sceneImage) {
             return NextResponse.json(
@@ -1413,14 +1363,11 @@ export async function POST(req: Request) {
             );
         }
 
-        const effective = getEffectiveProductData({
+        const intent = resolveInflatableIntent({
             userPrompt,
-            productType,
-            productPreset,
+            selectedProductType: productType,
+            selectedProductPreset: productPreset,
         });
-
-        const effectiveProductType = effective.productType;
-        const effectiveProductPreset = effective.productPreset;
 
         const respectReference = clamp(
             Number(referenceControl?.respectReference ?? 85),
@@ -1440,8 +1387,8 @@ export async function POST(req: Request) {
                 refImage,
                 generateMode,
                 respectReference,
-                productType: effectiveProductType,
-                userPrompt,
+                productType: intent.productType,
+                userPrompt: intent.subject,
                 shapeDetail: shapeDetailValue,
             });
 
@@ -1482,19 +1429,28 @@ The background photo is handled only by the frontend and must remain unchanged.
         const finalPrompt = `
 ${inpaintIntro}
 
-STRICT SUBJECT LOCK:
-${effective.subjectLock}
+RESOLVED INTENT:
+Subject: ${intent.subject}
+Product type: ${intent.productType}
+Preset: ${intent.productPreset}
 
-USER REQUEST:
+STRICT SUBJECT LOCK:
+${intent.subjectLock}
+
+USER RAW REQUEST:
 ${userPrompt}
+
+UI SELECTED TYPE:
+${productType}
+
+RULE:
+The written user request is the primary source of truth.
+The selected UI type is secondary and must not override a clear subject in the text.
 
 EXPANDED REQUEST:
 ${prompt}
 
-PRODUCT PRESET:
-${effectiveProductPreset}
-
-${getProductTypePrompt(effectiveProductType, userPrompt, shapeDetailValue, pipeline)}
+${getProductTypePrompt(intent, shapeDetailValue, pipeline)}
 
 ${getPlacementPrompt(placementMode, pipeline)}
 
@@ -1521,7 +1477,7 @@ ${getMaterialPrompt(material)}
 
 ${getLightingPrompt(lighting, material, pipeline)}
 
-${getShapeDetailPrompt(shapeDetailValue, userPrompt, effectiveProductType, pipeline)}
+${getShapeDetailPrompt(shapeDetailValue, intent, pipeline)}
 
 PLACEMENT DATA:
 - placement mode: ${placementMode}
@@ -1545,7 +1501,8 @@ ${
 - match lighting and exposure of the original photograph;
 - no extra people;
 - no extra vehicles;
-- no changed building geometry outside mask.
+- no changed building geometry outside mask;
+- do not change the requested subject.
 `
         : `
 - one single inflatable object;
@@ -1562,8 +1519,8 @@ ${
 - no sky;
 - no people;
 - no props;
-- no real food;
-- clean edges suitable for compositing over a photo.
+- clean edges suitable for compositing over a photo;
+- do not change the requested subject.
 `
 }
 `.trim();
@@ -1573,8 +1530,7 @@ ${
             respectReference,
             shapeDetail: shapeDetailValue,
             lighting,
-            userPrompt,
-            productType: effectiveProductType,
+            intent,
             pipeline,
         });
 
@@ -1596,7 +1552,8 @@ ${
                 debug: {
                     pipeline,
                     originalProductType: productType,
-                    effectiveProductType,
+                    resolvedProductType: intent.productType,
+                    resolvedSubject: intent.subject,
                     userPrompt,
                     placementMode,
                     generateMode,
@@ -1630,7 +1587,8 @@ ${
             debug: {
                 pipeline,
                 originalProductType: productType,
-                effectiveProductType,
+                resolvedProductType: intent.productType,
+                resolvedSubject: intent.subject,
                 userPrompt,
                 placementMode,
                 generateMode,
