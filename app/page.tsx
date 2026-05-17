@@ -436,7 +436,7 @@ export default function Page() {
         const y = (clampedY / stageRect.height) * 100;
 
         setPosX(Math.max(0, Math.min(100, x)));
-        setPosY(Math.max(0, Math.min(100, y)));
+        setPosY(Math.max(0, Math.min(140, y)));
     };
 
     const handleGenerate = async () => {
@@ -961,7 +961,7 @@ export default function Page() {
                                 className="aztec-slider"
                                 type="range"
                                 min={0}
-                                max={100}
+                                max={140}
                                 step={0.1}
                                 value={posY}
                                 onChange={(e) => setPosY(Number(e.target.value))}
@@ -1035,7 +1035,8 @@ export default function Page() {
 
                             <div className="aztec-info-box" style={{ marginTop: 12 }}>
                                 0–10% = formă procedurală simplă, nu AI. Markerul
-                                este punctul de sprijin al obiectului.
+                                este punctul de sprijin al obiectului. Poziția Y poate
+                                coborî până la 140%.
                             </div>
                         </div>
                     </section>
