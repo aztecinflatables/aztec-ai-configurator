@@ -50,6 +50,7 @@ type RequestBody = {
     };
     adjustments?: {
         scalePercent?: number;
+        inpaintAreaScale?: number;
         rotationDeg?: number;
         shadowX?: number;
         shadowY?: number;
@@ -106,24 +107,6 @@ function cleanSubject(value: string) {
         .replace(/\s+,/g, ",")
         .replace(/,+/g, ",")
         .trim();
-}
-
-function isExplicitArchitectureObject(text: string) {
-    return containsAny(text, [
-        "arcada",
-        "arch",
-        "tunel",
-        "tunnel",
-        "cort",
-        "tent",
-        "cupola",
-        "dome",
-        "poarta",
-        "portal",
-        "intrare",
-        "stand",
-        "pavilion",
-    ]);
 }
 
 function isExplicitProductReplica(text: string) {
@@ -210,13 +193,7 @@ function resolveInflatableIntent(options: {
     selectedProductPreset: string;
 }) {
     const rawSubject = cleanSubject(options.userPrompt || "");
-    const normalizedSubject = normalizeText(rawSubject);
     const selectedType = options.selectedProductType || "Custom";
-
-    const hasExplicitArchitecture = isExplicitArchitectureObject(rawSubject);
-    const hasExplicitProduct = isExplicitProductReplica(rawSubject);
-    const hasExplicitFood = isExplicitFoodObject(rawSubject);
-    const hasExplicitCharacter = isExplicitCharacterOrAnimal(rawSubject);
 
     if (containsAny(rawSubject, ["arcada", "arch", "poarta", "portal", "intrare"])) {
         return {
@@ -270,7 +247,7 @@ function resolveInflatableIntent(options: {
         };
     }
 
-    if (hasExplicitProduct) {
+    if (isExplicitProductReplica(rawSubject)) {
         return {
             subject: rawSubject || "replică gonflabilă de produs",
             productType: "Replică produs",
@@ -283,7 +260,7 @@ function resolveInflatableIntent(options: {
         };
     }
 
-    if (hasExplicitFood) {
+    if (isExplicitFoodObject(rawSubject)) {
         return {
             subject: rawSubject || "obiect alimentar gonflabil",
             productType: "Replică food",
@@ -296,7 +273,7 @@ function resolveInflatableIntent(options: {
         };
     }
 
-    if (hasExplicitCharacter) {
+    if (isExplicitCharacterOrAnimal(rawSubject)) {
         return {
             subject: rawSubject || "mascotă gonflabilă",
             productType: "Mascotă",
@@ -478,16 +455,8 @@ Mandatory result:
 - match the camera perspective and lighting of the original photo;
 - use PVC inflatable construction, rounded air-filled volumes and fabricable forms;
 - do not replace the requested subject with a different category;
-${
-    lowDetail
-        ? "- low detail means simplified but still recognizable, not abstract and not a wrong object;"
-        : ""
-}
-${
-    mediumDetail
-        ? "- avoid micro-details, tiny geometry and over-complex surfaces;"
-        : "- allow more recognizable details, but keep everything fabricable as a PVC inflatable;"
-}
+${lowDetail ? "- low detail means simplified but still recognizable, not abstract and not a wrong object;" : ""}
+${mediumDetail ? "- avoid micro-details, tiny geometry and over-complex surfaces;" : "- allow more recognizable details, but keep everything fabricable as a PVC inflatable;"}
 `.trim();
     }
 
@@ -510,11 +479,7 @@ Mandatory result:
 - rounded air-filled volumes;
 - fabricable commercial inflatable form;
 - do not replace the requested subject with a different object;
-${
-    lowDetail
-        ? "- low detail means simplified but still recognizable, not abstract and not a wrong object;"
-        : ""
-}
+${lowDetail ? "- low detail means simplified but still recognizable, not abstract and not a wrong object;" : ""}
 `.trim();
 }
 
@@ -1437,18 +1402,15 @@ Preset: ${intent.productPreset}
 STRICT SUBJECT LOCK:
 ${intent.subjectLock}
 
-USER RAW REQUEST:
-${userPrompt}
+CLEAN USER REQUEST:
+${intent.subject}
 
-UI SELECTED TYPE:
+UI SELECTED TYPE, SECONDARY ONLY:
 ${productType}
 
 RULE:
 The written user request is the primary source of truth.
 The selected UI type is secondary and must not override a clear subject in the text.
-
-EXPANDED REQUEST:
-${prompt}
 
 ${getProductTypePrompt(intent, shapeDetailValue, pipeline)}
 
@@ -1485,6 +1447,7 @@ PLACEMENT DATA:
 - position x: ${placement?.x ?? "unknown"}%
 - position y: ${placement?.y ?? "unknown"}%
 - scale percent: ${adjustments?.scalePercent ?? "unknown"}%
+- inpaint area scale: ${adjustments?.inpaintAreaScale ?? "unknown"}%
 - rotation: ${adjustments?.rotationDeg ?? 0} degrees
 
 ABSOLUTE OUTPUT RULES:
@@ -1555,6 +1518,7 @@ ${
                     resolvedProductType: intent.productType,
                     resolvedSubject: intent.subject,
                     userPrompt,
+                    prompt,
                     placementMode,
                     generateMode,
                     respectReference,
@@ -1590,6 +1554,7 @@ ${
                 resolvedProductType: intent.productType,
                 resolvedSubject: intent.subject,
                 userPrompt,
+                prompt,
                 placementMode,
                 generateMode,
                 respectReference,
