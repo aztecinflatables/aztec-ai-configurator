@@ -79,6 +79,10 @@ function normalizeText(value: string) {
         .replace(/[\u0300-\u036f]/g, "");
 }
 
+function clamp(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value));
+}
+
 function getObjectFilter(lighting: string, material: MaterialMode) {
     if (lighting === "Noapte") {
         if (material === "LED interior" || material === "Alb translucid") {
@@ -119,59 +123,275 @@ function getDefaultShadowSettings(placementMode: PlacementMode) {
     return { x: 3, y: 2, scaleX: 84, scaleY: 15, blur: 16, opacity: 36, skew: -6 };
 }
 
+function getMaskAspect(
+    productType: ProductType,
+    prompt: string,
+    shapeDetail: number
+) {
+    const p = normalizeText(prompt);
+    const detailT = clamp(shapeDetail / 100, 0, 1);
+    const burgerLike = p.includes("burger") || p.includes("hamburger");
+
+    if (burgerLike) {
+        return {
+            widthRatio: 1.18,
+            heightRatio: 0.68 + detailT * 0.14,
+        };
+    }
+
+    if (productType === "Arcadă") return { widthRatio: 1.25, heightRatio: 1.02 };
+    if (productType === "Tunel") return { widthRatio: 1.22, heightRatio: 1.0 };
+    if (productType === "Cort") return { widthRatio: 1.18, heightRatio: 0.92 };
+    if (productType === "Cupolă") return { widthRatio: 1.2, heightRatio: 0.82 };
+    if (productType === "Sticlă") return { widthRatio: 0.58, heightRatio: 1.6 };
+    if (productType === "Mascotă") return { widthRatio: 0.9, heightRatio: 1.1 };
+
+    return { widthRatio: 1.0, heightRatio: 1.0 };
+}
+
+function roundedRectPath(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number
+) {
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + width - r, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+    ctx.lineTo(x + width, y + height - r);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    ctx.lineTo(x + r, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function drawBurgerMask(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    baseY: number,
+    width: number,
+    height: number,
+    detail: number
+) {
+    const detailT = clamp(detail / 100, 0, 1);
+
+    const totalH = height * (0.78 + detailT * 0.12);
+    const topBunH = totalH * 0.4;
+    const fillingsH = totalH * (0.16 + detailT * 0.12);
+    const bottomBunH = totalH * 0.22;
+    const bodyBottom = baseY;
+    const bodyTop = bodyBottom - totalH;
+    const topCenterY = bodyTop + topBunH * 0.54;
+
+    ctx.beginPath();
+    ctx.ellipse(cx, topCenterY, width * 0.46, topBunH * 0.64, 0, Math.PI, 0, true);
+    ctx.lineTo(cx + width * 0.46, bodyBottom - bottomBunH * 0.8);
+    ctx.quadraticCurveTo(
+        cx + width * 0.44,
+        bodyBottom - bottomBunH * 0.25,
+        cx + width * 0.32,
+        bodyBottom - bottomBunH * 0.02
+    );
+    ctx.lineTo(cx - width * 0.32, bodyBottom - bottomBunH * 0.02);
+    ctx.quadraticCurveTo(
+        cx - width * 0.44,
+        bodyBottom - bottomBunH * 0.25,
+        cx - width * 0.46,
+        bodyBottom - bottomBunH * 0.8
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    if (detail >= 8) {
+        ctx.fillRect(
+            cx - width * 0.4,
+            bodyTop + topBunH * 0.9,
+            width * 0.8,
+            fillingsH
+        );
+    }
+}
+
+function drawBottleMask(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    baseY: number,
+    width: number,
+    height: number
+) {
+    const h = height;
+    const w = width;
+    const topY = baseY - h;
+
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.2, topY + h * 0.18);
+    ctx.lineTo(cx - w * 0.12, topY + h * 0.06);
+    ctx.lineTo(cx - w * 0.12, topY + h * 0.0);
+    ctx.lineTo(cx + w * 0.12, topY + h * 0.0);
+    ctx.lineTo(cx + w * 0.12, topY + h * 0.06);
+    ctx.lineTo(cx + w * 0.2, topY + h * 0.18);
+    ctx.quadraticCurveTo(cx + w * 0.5, topY + h * 0.26, cx + w * 0.48, topY + h * 0.62);
+    ctx.lineTo(cx + w * 0.42, baseY - h * 0.05);
+    ctx.quadraticCurveTo(cx + w * 0.36, baseY, cx + w * 0.22, baseY);
+    ctx.lineTo(cx - w * 0.22, baseY);
+    ctx.quadraticCurveTo(cx - w * 0.36, baseY, cx - w * 0.42, baseY - h * 0.05);
+    ctx.lineTo(cx - w * 0.48, topY + h * 0.62);
+    ctx.quadraticCurveTo(cx - w * 0.5, topY + h * 0.26, cx - w * 0.2, topY + h * 0.18);
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawArchMask(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    baseY: number,
+    width: number,
+    height: number
+) {
+    const w = width;
+    const h = height;
+    const legX1 = cx - w * 0.36;
+    const legX2 = cx + w * 0.36;
+    const topY = baseY - h * 0.88;
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(12, w * 0.18);
+    ctx.beginPath();
+    ctx.moveTo(legX1, baseY);
+    ctx.lineTo(legX1, baseY - h * 0.38);
+    ctx.quadraticCurveTo(cx - w * 0.34, topY + h * 0.08, cx, topY);
+    ctx.quadraticCurveTo(cx + w * 0.34, topY + h * 0.08, legX2, baseY - h * 0.38);
+    ctx.lineTo(legX2, baseY);
+    ctx.stroke();
+}
+
+function drawTunnelMask(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    baseY: number,
+    width: number,
+    height: number
+) {
+    const w = width;
+    const h = height;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(12, w * 0.22);
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.34, baseY);
+    ctx.lineTo(cx - w * 0.34, baseY - h * 0.32);
+    ctx.quadraticCurveTo(cx - w * 0.28, baseY - h * 0.95, cx, baseY - h * 0.95);
+    ctx.quadraticCurveTo(cx + w * 0.28, baseY - h * 0.95, cx + w * 0.34, baseY - h * 0.32);
+    ctx.lineTo(cx + w * 0.34, baseY);
+    ctx.stroke();
+}
+
+function drawTentMask(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    baseY: number,
+    width: number,
+    height: number
+) {
+    const w = width;
+    const h = height;
+    const x = cx - w / 2;
+    const y = baseY - h;
+
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.08, baseY);
+    ctx.lineTo(x + w * 0.18, y + h * 0.34);
+    ctx.quadraticCurveTo(x + w * 0.28, y + h * 0.08, cx, y + h * 0.06);
+    ctx.quadraticCurveTo(x + w * 0.72, y + h * 0.08, x + w * 0.82, y + h * 0.34);
+    ctx.lineTo(x + w * 0.92, baseY);
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawDomeMask(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    baseY: number,
+    width: number,
+    height: number
+) {
+    const w = width;
+    const h = height;
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.48, baseY);
+    ctx.quadraticCurveTo(cx - w * 0.46, baseY - h * 0.96, cx, baseY - h * 0.96);
+    ctx.quadraticCurveTo(cx + w * 0.46, baseY - h * 0.96, cx + w * 0.48, baseY);
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawSimpleBlobMask(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    baseY: number,
+    width: number,
+    height: number,
+    radiusFactor = 0.32
+) {
+    const x = cx - width / 2;
+    const y = baseY - height;
+    roundedRectPath(ctx, x, y, width, height, Math.min(width, height) * radiusFactor);
+    ctx.fill();
+}
+
 function makeProceduralInflatableSvgDataUrl(options: {
     prompt: string;
     productType: ProductType;
     material: MaterialMode;
     lighting: string;
+    shapeDetail: number;
 }) {
     const prompt = normalizeText(options.prompt);
     const isBurger = prompt.includes("burger") || prompt.includes("hamburger");
-
     const ledGlow =
         options.material === "LED interior" || options.material === "Alb translucid";
-
     const night = options.lighting === "Noapte";
     const warm = options.lighting === "Golden hour";
+    const detailT = clamp(options.shapeDetail / 10, 0, 1);
 
     const bgGlow = ledGlow
-        ? `<ellipse cx="512" cy="410" rx="430" ry="230" fill="rgba(255,215,125,0.22)" filter="url(#blurGlow)" />`
+        ? `<ellipse cx="512" cy="418" rx="430" ry="230" fill="rgba(255,215,125,0.22)" filter="url(#blurGlow)" />`
         : "";
 
-    const glossyOpacity = options.material === "PVC mat" ? 0.16 : 0.34;
-    const seamOpacity = options.material === "PVC mat" ? 0.18 : 0.28;
-    const globalBrightness = night ? 0.78 : warm ? 1.06 : 1;
+    const glossyOpacity = options.material === "PVC mat" ? 0.14 : 0.28;
+    const seamOpacity = options.material === "PVC mat" ? 0.18 : 0.24;
+    const globalBrightness = night ? 0.78 : warm ? 1.05 : 1;
 
     let body = "";
 
     if (isBurger) {
         body = `
             <g filter="url(#softShadow)">
-                <ellipse cx="512" cy="500" rx="390" ry="210" fill="url(#burgerBase)" />
-                <path d="M150 495 C260 418 760 418 874 495 C762 565 262 565 150 495 Z" fill="rgba(255,255,255,0.10)" />
-                <path d="M170 450 C280 390 748 390 854 450 L854 500 C736 450 287 450 170 500 Z" fill="url(#bunTop)" />
-                <path d="M175 510 C290 555 735 555 850 510 L850 565 C732 615 292 615 175 565 Z" fill="url(#bunBottom)" />
-
-                <rect x="170" y="471" width="684" height="28" rx="14" fill="url(#tomatoBand)" opacity="0.92" />
-                <rect x="188" y="501" width="648" height="34" rx="17" fill="url(#lettuceBand)" opacity="0.86" />
-                <rect x="200" y="535" width="624" height="42" rx="21" fill="url(#pattyBand)" opacity="0.9" />
-                <rect x="210" y="575" width="604" height="32" rx="16" fill="url(#cheeseBand)" opacity="0.82" />
-
-                <ellipse cx="512" cy="500" rx="390" ry="210" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
-                <ellipse cx="512" cy="500" rx="389" ry="209" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
-                <ellipse cx="512" cy="500" rx="372" ry="195" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="4" />
-
-                <path d="M230 375 C350 315 670 315 793 375" stroke="rgba(255,255,255,0.30)" stroke-width="22" stroke-linecap="round" fill="none" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="540" rx="370" ry="${170 + detailT * 18}" fill="url(#burgerBody)" />
+                <ellipse cx="512" cy="535" rx="365" ry="${165 + detailT * 15}" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="540" rx="370" ry="${170 + detailT * 18}" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
+                <ellipse cx="512" cy="470" rx="305" ry="82" fill="rgba(255,227,165,0.60)" />
+                <rect x="220" y="520" width="584" height="26" rx="13" fill="#c34f42" opacity="0.95" />
+                <rect x="210" y="554" width="604" height="20" rx="10" fill="#8db83c" opacity="0.96" />
+                <rect x="225" y="585" width="574" height="28" rx="14" fill="#654128" opacity="0.96" />
+                <rect x="240" y="624" width="544" height="20" rx="10" fill="#cda32f" opacity="0.95" />
+                <path d="M248 435 C365 376 660 376 774 435" stroke="rgba(255,255,255,0.28)" stroke-width="18" stroke-linecap="round" fill="none" />
             </g>
         `;
     } else {
         body = `
             <g filter="url(#softShadow)">
-                <ellipse cx="512" cy="500" rx="390" ry="220" fill="url(#genericBase)" />
-                <ellipse cx="512" cy="500" rx="390" ry="220" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
-                <ellipse cx="512" cy="500" rx="389" ry="219" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
-                <ellipse cx="512" cy="500" rx="372" ry="204" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="4" />
-                <path d="M230 375 C350 315 670 315 793 375" stroke="rgba(255,255,255,0.32)" stroke-width="24" stroke-linecap="round" fill="none" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="540" rx="360" ry="195" fill="url(#genericBase)" />
+                <ellipse cx="512" cy="536" rx="356" ry="191" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="540" rx="360" ry="195" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
+                <path d="M240 415 C348 360 676 360 784 415" stroke="rgba(255,255,255,0.28)" stroke-width="20" stroke-linecap="round" fill="none" />
             </g>
         `;
     }
@@ -193,50 +413,16 @@ function makeProceduralInflatableSvgDataUrl(options: {
             <stop offset="100%" stop-color="${ledGlow ? "#c98518" : "#b84300"}" />
         </radialGradient>
 
-        <radialGradient id="burgerBase" cx="38%" cy="26%" r="78%">
-            <stop offset="0%" stop-color="#f6d7a4" />
-            <stop offset="45%" stop-color="#d89043" />
-            <stop offset="100%" stop-color="#8f4d19" />
+        <radialGradient id="burgerBody" cx="38%" cy="26%" r="78%">
+            <stop offset="0%" stop-color="#f5dcb5" />
+            <stop offset="36%" stop-color="#e4b165" />
+            <stop offset="100%" stop-color="#b86a28" />
         </radialGradient>
 
-        <linearGradient id="bunTop" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#f0c177" />
-            <stop offset="100%" stop-color="#b86b24" />
-        </linearGradient>
-
-        <linearGradient id="bunBottom" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#d58b42" />
-            <stop offset="100%" stop-color="#9f541a" />
-        </linearGradient>
-
-        <linearGradient id="tomatoBand" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="#b31d1a" />
-            <stop offset="45%" stop-color="#f05a38" />
-            <stop offset="100%" stop-color="#921516" />
-        </linearGradient>
-
-        <linearGradient id="lettuceBand" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="#3d8d2c" />
-            <stop offset="45%" stop-color="#9ece3d" />
-            <stop offset="100%" stop-color="#2f7124" />
-        </linearGradient>
-
-        <linearGradient id="pattyBand" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="#4e2315" />
-            <stop offset="45%" stop-color="#7a3b22" />
-            <stop offset="100%" stop-color="#32140d" />
-        </linearGradient>
-
-        <linearGradient id="cheeseBand" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="#f7c928" />
-            <stop offset="45%" stop-color="#ffe06a" />
-            <stop offset="100%" stop-color="#d99205" />
-        </linearGradient>
-
-        <radialGradient id="surfaceGloss" cx="35%" cy="20%" r="70%">
-            <stop offset="0%" stop-color="rgba(255,255,255,0.85)" />
-            <stop offset="32%" stop-color="rgba(255,255,255,0.28)" />
-            <stop offset="70%" stop-color="rgba(255,255,255,0.04)" />
+        <radialGradient id="surfaceGloss" cx="34%" cy="18%" r="68%">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.80)" />
+            <stop offset="28%" stop-color="rgba(255,255,255,0.22)" />
+            <stop offset="72%" stop-color="rgba(255,255,255,0.04)" />
             <stop offset="100%" stop-color="rgba(255,255,255,0)" />
         </radialGradient>
     </defs>
@@ -279,9 +465,12 @@ export default function Page() {
     const [material, setMaterial] = useState<MaterialMode>("PVC lucios");
     const [lighting, setLighting] = useState("Zi");
 
-    const [shapeDetail, setShapeDetail] = useState(5);
+    const [shapeDetail, setShapeDetail] = useState(10);
 
     const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
+    const [resultSceneUrl, setResultSceneUrl] = useState<string | null>(null);
+    const [maskDebugUrl, setMaskDebugUrl] = useState<string | null>(null);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -309,6 +498,8 @@ export default function Page() {
     const subjectPrompt = cleanUserPrompt(userPrompt) || userPrompt.trim();
     const fullPrompt = `${subjectPrompt}. ${PRODUCT_PRESETS[selectedProductType]}`;
 
+    const displayedScene = resultSceneUrl || sceneImage;
+
     const objectFilter = `
         ${getObjectFilter(lighting, material)}
         brightness(${objectBrightness}%)
@@ -316,6 +507,13 @@ export default function Page() {
         sepia(${Math.max(0, objectWarmth) / 100})
         hue-rotate(${objectWarmth < 0 ? objectWarmth : -objectWarmth * 0.12}deg)
     `;
+
+    const clearResults = () => {
+        setOverlayUrl(null);
+        setResultSceneUrl(null);
+        setMaskDebugUrl(null);
+        setError(null);
+    };
 
     const fileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -352,7 +550,9 @@ export default function Page() {
         const base64 = await fileToBase64(file);
         setSceneBase64(base64);
         setSceneImage(`data:${file.type};base64,${base64}`);
+        setResultSceneUrl(null);
         setOverlayUrl(null);
+        setMaskDebugUrl(null);
         setError(null);
     };
 
@@ -364,8 +564,7 @@ export default function Page() {
 
         const base64 = await fileToBase64(file);
         setRefImage(base64);
-        setOverlayUrl(null);
-        setError(null);
+        clearResults();
     };
 
     const handleTextureUpload = async (
@@ -376,8 +575,7 @@ export default function Page() {
 
         const base64 = await fileToBase64(file);
         setTextureImage(base64);
-        setOverlayUrl(null);
-        setError(null);
+        clearResults();
     };
 
     const getContainedImageRect = () => {
@@ -412,8 +610,128 @@ export default function Page() {
         };
     };
 
+    const buildMaskBase64 = () => {
+        const metrics = getContainedImageRect();
+        if (!metrics || !sceneNatural.width || !sceneNatural.height) return null;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(sceneNatural.width));
+        canvas.height = Math.max(1, Math.round(sceneNatural.height));
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "white";
+        ctx.strokeStyle = "white";
+
+        const stageW = metrics.stageRect.width;
+        const stageH = metrics.stageRect.height;
+
+        const anchorStageX = (posX / 100) * stageW;
+        const anchorStageY = (posY / 100) * stageH;
+
+        const imageX =
+            ((anchorStageX - metrics.imageLeft) / metrics.imageWidth) * canvas.width;
+        const imageY =
+            ((anchorStageY - metrics.imageTop) / metrics.imageHeight) * canvas.height;
+
+        const displayedObjectWidthPx = (overlayScale / 100) * stageW;
+        const objectWidthInImagePx =
+            (displayedObjectWidthPx / metrics.imageWidth) * canvas.width;
+
+        const aspect = getMaskAspect(selectedProductType, subjectPrompt, shapeDetail);
+        const objectMaskWidth = objectWidthInImagePx * aspect.widthRatio;
+        const objectMaskHeight = objectWidthInImagePx * aspect.heightRatio;
+
+        const promptNorm = normalizeText(subjectPrompt);
+        const burgerLike =
+            promptNorm.includes("burger") || promptNorm.includes("hamburger");
+
+        ctx.save();
+        ctx.translate(imageX, imageY);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.translate(-imageX, -imageY);
+
+        if (burgerLike) {
+            drawBurgerMask(
+                ctx,
+                imageX,
+                imageY,
+                objectMaskWidth,
+                objectMaskHeight,
+                shapeDetail
+            );
+        } else if (selectedProductType === "Arcadă") {
+            drawArchMask(
+                ctx,
+                imageX,
+                imageY,
+                objectMaskWidth,
+                objectMaskHeight
+            );
+        } else if (selectedProductType === "Tunel") {
+            drawTunnelMask(
+                ctx,
+                imageX,
+                imageY,
+                objectMaskWidth,
+                objectMaskHeight
+            );
+        } else if (selectedProductType === "Cort") {
+            drawTentMask(
+                ctx,
+                imageX,
+                imageY,
+                objectMaskWidth,
+                objectMaskHeight
+            );
+        } else if (selectedProductType === "Cupolă") {
+            drawDomeMask(
+                ctx,
+                imageX,
+                imageY,
+                objectMaskWidth,
+                objectMaskHeight
+            );
+        } else if (selectedProductType === "Sticlă") {
+            drawBottleMask(
+                ctx,
+                imageX,
+                imageY,
+                objectMaskWidth,
+                objectMaskHeight
+            );
+        } else if (selectedProductType === "Mascotă") {
+            drawSimpleBlobMask(
+                ctx,
+                imageX,
+                imageY,
+                objectMaskWidth,
+                objectMaskHeight,
+                0.42
+            );
+        } else {
+            drawSimpleBlobMask(
+                ctx,
+                imageX,
+                imageY,
+                objectMaskWidth,
+                objectMaskHeight,
+                0.34
+            );
+        }
+
+        ctx.restore();
+
+        const dataUrl = canvas.toDataURL("image/png");
+        setMaskDebugUrl(dataUrl);
+        return dataUrl.split(",")[1];
+    };
+
     const handlePreviewClick = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (!previewRef.current || !sceneImage || loading || overlayUrl) return;
+        if (!previewRef.current || !sceneImage || loading) return;
 
         const imageRect = getContainedImageRect();
         if (!imageRect) return;
@@ -435,8 +753,9 @@ export default function Page() {
         const x = (clampedX / stageRect.width) * 100;
         const y = (clampedY / stageRect.height) * 100;
 
-        setPosX(Math.max(0, Math.min(100, x)));
-        setPosY(Math.max(0, Math.min(140, y)));
+        setPosX(clamp(x, 0, 100));
+        setPosY(clamp(y, 0, 180));
+        clearResults();
     };
 
     const handleGenerate = async () => {
@@ -448,21 +767,30 @@ export default function Page() {
         setLoading(true);
         setError(null);
         setOverlayUrl(null);
-
-        if (shapeDetail <= 10) {
-            const proceduralUrl = makeProceduralInflatableSvgDataUrl({
-                prompt: subjectPrompt,
-                productType: selectedProductType,
-                material,
-                lighting,
-            });
-
-            setOverlayUrl(proceduralUrl);
-            setLoading(false);
-            return;
-        }
+        setResultSceneUrl(null);
 
         try {
+            const proceduralMode = generateMode === "rapid" && shapeDetail <= 10;
+
+            if (proceduralMode) {
+                const proceduralUrl = makeProceduralInflatableSvgDataUrl({
+                    prompt: subjectPrompt,
+                    productType: selectedProductType,
+                    material,
+                    lighting,
+                    shapeDetail,
+                });
+
+                setOverlayUrl(proceduralUrl);
+                setLoading(false);
+                return;
+            }
+
+            const maskBase64 = buildMaskBase64();
+            if (!maskBase64) {
+                throw new Error("Nu am putut genera masca pentru inpaint.");
+            }
+
             const response = await fetch("/api/generate", {
                 method: "POST",
                 headers: {
@@ -472,12 +800,15 @@ export default function Page() {
                     sceneImage: sceneBase64,
                     refImage,
                     textureImage,
+                    maskImage: maskBase64,
                     prompt: fullPrompt,
                     userPrompt: subjectPrompt,
                     productPreset: PRODUCT_PRESETS[selectedProductType],
                     productType: selectedProductType,
                     placementMode,
                     generateMode,
+                    renderPipeline:
+                        generateMode === "rapid" ? "overlay" : "inpaint",
                     referenceControl: {
                         respectReference,
                         respectShape,
@@ -497,6 +828,22 @@ export default function Page() {
                     placement: {
                         x: posX,
                         y: posY,
+                        anchor: "base-center",
+                    },
+                    adjustments: {
+                        scalePercent: overlayScale,
+                        rotationDeg: rotation,
+                        shadowX,
+                        shadowY,
+                        shadowScaleX,
+                        shadowScaleY,
+                        shadowBlur,
+                        shadowOpacity,
+                        shadowSkew,
+                        objectBrightness,
+                        objectContrast,
+                        objectWarmth,
+                        objectOpacity,
                     },
                 }),
             });
@@ -507,11 +854,17 @@ export default function Page() {
                 throw new Error(data.error || "Eroare la generare.");
             }
 
-            if (!data.overlayUrl) {
-                throw new Error("API-ul nu a returnat imaginea generată.");
+            if (data.compositedUrl || data.resultSceneUrl || data.finalImageUrl) {
+                setResultSceneUrl(
+                    data.compositedUrl || data.resultSceneUrl || data.finalImageUrl
+                );
+                setOverlayUrl(null);
+            } else if (data.overlayUrl) {
+                setOverlayUrl(data.overlayUrl);
+                setResultSceneUrl(null);
+            } else {
+                throw new Error("API-ul nu a returnat un rezultat valid.");
             }
-
-            setOverlayUrl(data.overlayUrl);
         } catch (err: any) {
             setError(err.message || "Eroare necunoscută.");
         }
@@ -587,7 +940,7 @@ export default function Page() {
                                 value={userPrompt}
                                 onChange={(e) => {
                                     setUserPrompt(e.target.value);
-                                    setOverlayUrl(null);
+                                    clearResults();
                                 }}
                                 placeholder="Ex: burger, arcadă AZTEC, mascotă urs, sticlă de suc..."
                             />
@@ -619,7 +972,7 @@ export default function Page() {
                                             type="button"
                                             onClick={() => {
                                                 setSelectedProductType(chip);
-                                                setOverlayUrl(null);
+                                                clearResults();
                                             }}
                                             style={{
                                                 border: active
@@ -656,7 +1009,7 @@ export default function Page() {
                                     const next = e.target.value as PlacementMode;
                                     setPlacementMode(next);
                                     resetShadowForPlacement(next);
-                                    setOverlayUrl(null);
+                                    clearResults();
                                 }}
                             >
                                 <option>Pe sol</option>
@@ -665,14 +1018,6 @@ export default function Page() {
                                 <option>Suspendat</option>
                                 <option>În interior</option>
                             </select>
-
-                            <div className="aztec-info-box" style={{ marginTop: 14 }}>
-                                Text trimis de utilizator:
-                                <br />
-                                <strong style={{ color: "#FFFFFF" }}>
-                                    {userPrompt}
-                                </strong>
-                            </div>
                         </div>
                     </section>
 
@@ -687,7 +1032,10 @@ export default function Page() {
                             <div className="aztec-two-cols">
                                 <button
                                     type="button"
-                                    onClick={() => setGenerateMode("rapid")}
+                                    onClick={() => {
+                                        setGenerateMode("rapid");
+                                        clearResults();
+                                    }}
                                     className={
                                         generateMode === "rapid"
                                             ? "aztec-tab aztec-tab-active"
@@ -699,7 +1047,10 @@ export default function Page() {
 
                                 <button
                                     type="button"
-                                    onClick={() => setGenerateMode("photo")}
+                                    onClick={() => {
+                                        setGenerateMode("photo");
+                                        clearResults();
+                                    }}
                                     className={
                                         generateMode === "photo"
                                             ? "aztec-tab aztec-tab-active"
@@ -712,7 +1063,10 @@ export default function Page() {
 
                             <button
                                 type="button"
-                                onClick={() => setGenerateMode("replica")}
+                                onClick={() => {
+                                    setGenerateMode("replica");
+                                    clearResults();
+                                }}
                                 className={
                                     generateMode === "replica"
                                         ? "aztec-tab aztec-tab-active"
@@ -746,9 +1100,10 @@ export default function Page() {
                                 min={0}
                                 max={100}
                                 value={respectReference}
-                                onChange={(e) =>
-                                    setRespectReference(Number(e.target.value))
-                                }
+                                onChange={(e) => {
+                                    setRespectReference(Number(e.target.value));
+                                    clearResults();
+                                }}
                             />
 
                             <div
@@ -764,9 +1119,10 @@ export default function Page() {
                                         className="aztec-checkbox"
                                         type="checkbox"
                                         checked={respectShape}
-                                        onChange={(e) =>
-                                            setRespectShape(e.target.checked)
-                                        }
+                                        onChange={(e) => {
+                                            setRespectShape(e.target.checked);
+                                            clearResults();
+                                        }}
                                     />
                                     Forma
                                 </label>
@@ -776,9 +1132,10 @@ export default function Page() {
                                         className="aztec-checkbox"
                                         type="checkbox"
                                         checked={respectTexture}
-                                        onChange={(e) =>
-                                            setRespectTexture(e.target.checked)
-                                        }
+                                        onChange={(e) => {
+                                            setRespectTexture(e.target.checked);
+                                            clearResults();
+                                        }}
                                     />
                                     Textura
                                 </label>
@@ -788,9 +1145,10 @@ export default function Page() {
                                         className="aztec-checkbox"
                                         type="checkbox"
                                         checked={respectProportions}
-                                        onChange={(e) =>
-                                            setRespectProportions(e.target.checked)
-                                        }
+                                        onChange={(e) => {
+                                            setRespectProportions(e.target.checked);
+                                            clearResults();
+                                        }}
                                     />
                                     Proporții
                                 </label>
@@ -800,9 +1158,10 @@ export default function Page() {
                                         className="aztec-checkbox"
                                         type="checkbox"
                                         checked={respectBranding}
-                                        onChange={(e) =>
-                                            setRespectBranding(e.target.checked)
-                                        }
+                                        onChange={(e) => {
+                                            setRespectBranding(e.target.checked);
+                                            clearResults();
+                                        }}
                                     />
                                     Branding
                                 </label>
@@ -834,7 +1193,7 @@ export default function Page() {
                                 value={heightM}
                                 onChange={(e) => {
                                     setHeightM(Number(e.target.value));
-                                    setOverlayUrl(null);
+                                    clearResults();
                                 }}
                             />
 
@@ -867,7 +1226,7 @@ export default function Page() {
                                 value={material}
                                 onChange={(e) => {
                                     setMaterial(e.target.value as MaterialMode);
-                                    setOverlayUrl(null);
+                                    clearResults();
                                 }}
                             >
                                 <option>PVC lucios</option>
@@ -885,7 +1244,7 @@ export default function Page() {
                                 value={lighting}
                                 onChange={(e) => {
                                     setLighting(e.target.value);
-                                    setOverlayUrl(null);
+                                    clearResults();
 
                                     if (e.target.value === "Noapte") {
                                         setObjectBrightness(78);
@@ -944,7 +1303,10 @@ export default function Page() {
                                 max={100}
                                 step={0.1}
                                 value={posX}
-                                onChange={(e) => setPosX(Number(e.target.value))}
+                                onChange={(e) => {
+                                    setPosX(Number(e.target.value));
+                                    clearResults();
+                                }}
                             />
 
                             <div
@@ -961,10 +1323,13 @@ export default function Page() {
                                 className="aztec-slider"
                                 type="range"
                                 min={0}
-                                max={140}
+                                max={180}
                                 step={0.1}
                                 value={posY}
-                                onChange={(e) => setPosY(Number(e.target.value))}
+                                onChange={(e) => {
+                                    setPosY(Number(e.target.value));
+                                    clearResults();
+                                }}
                             />
 
                             <div
@@ -983,9 +1348,10 @@ export default function Page() {
                                 min={5}
                                 max={120}
                                 value={overlayScale}
-                                onChange={(e) =>
-                                    setOverlayScale(Number(e.target.value))
-                                }
+                                onChange={(e) => {
+                                    setOverlayScale(Number(e.target.value));
+                                    clearResults();
+                                }}
                             />
 
                             <div
@@ -1004,9 +1370,10 @@ export default function Page() {
                                 min={-30}
                                 max={30}
                                 value={rotation}
-                                onChange={(e) =>
-                                    setRotation(Number(e.target.value))
-                                }
+                                onChange={(e) => {
+                                    setRotation(Number(e.target.value));
+                                    clearResults();
+                                }}
                             />
 
                             <div
@@ -1029,14 +1396,14 @@ export default function Page() {
                                 value={shapeDetail}
                                 onChange={(e) => {
                                     setShapeDetail(Number(e.target.value));
-                                    setOverlayUrl(null);
+                                    clearResults();
                                 }}
                             />
 
                             <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                0–10% = formă procedurală simplă, nu AI. Markerul
-                                este punctul de sprijin al obiectului. Poziția Y poate
-                                coborî până la 140%.
+                                0–10% = formă simplificată, dar recognoscibilă. În
+                                modul MOCKUP rămâne local. În FOTO / REPLICĂ se
+                                trimite mască pentru inpaint.
                             </div>
                         </div>
                     </section>
@@ -1076,11 +1443,14 @@ export default function Page() {
                                         min={min as number}
                                         max={max as number}
                                         value={value as number}
-                                        onChange={(e) =>
-                                            (setter as React.Dispatch<React.SetStateAction<number>>)(
-                                                Number(e.target.value)
-                                            )
-                                        }
+                                        onChange={(e) => {
+                                            (
+                                                setter as React.Dispatch<
+                                                    React.SetStateAction<number>
+                                                >
+                                            )(Number(e.target.value));
+                                            clearResults();
+                                        }}
                                     />
                                 </div>
                             ))}
@@ -1120,22 +1490,24 @@ export default function Page() {
                     }
                     onClick={handlePreviewClick}
                 >
-                    {!sceneImage && (
+                    {!displayedScene && (
                         <div className="aztec-preview-placeholder">
                             Încarcă o imagine de locație pentru previzualizare
                         </div>
                     )}
 
-                    {sceneImage && (
+                    {displayedScene && (
                         <img
                             className="aztec-preview-image"
-                            src={sceneImage}
+                            src={displayedScene}
                             alt="Scenă"
                             onLoad={(event) => {
-                                setSceneNatural({
-                                    width: event.currentTarget.naturalWidth,
-                                    height: event.currentTarget.naturalHeight,
-                                });
+                                if (!resultSceneUrl) {
+                                    setSceneNatural({
+                                        width: event.currentTarget.naturalWidth,
+                                        height: event.currentTarget.naturalHeight,
+                                    });
+                                }
                             }}
                         />
                     )}
@@ -1197,13 +1569,14 @@ export default function Page() {
                                         lineHeight: 1.4,
                                     }}
                                 >
-                                    Se folosește poziția marcată. Nu închide pagina.
+                                    În mod FOTO / REPLICĂ se trimite mască pentru
+                                    inpaint.
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {overlayUrl && (
+                    {overlayUrl && !resultSceneUrl && (
                         <>
                             <div
                                 style={{
@@ -1245,7 +1618,7 @@ export default function Page() {
                         </>
                     )}
 
-                    {sceneImage && !overlayUrl && !loading && (
+                    {sceneImage && !loading && !resultSceneUrl && !overlayUrl && (
                         <div
                             className="aztec-position-dot"
                             style={{
@@ -1260,6 +1633,25 @@ export default function Page() {
                     <span>Click poziție: X {posX.toFixed(1)}%</span>
                     <span>Y {posY.toFixed(1)}%</span>
                 </div>
+
+                {maskDebugUrl && (
+                    <details style={{ marginTop: 10, color: "white" }}>
+                        <summary style={{ cursor: "pointer", opacity: 0.75 }}>
+                            Debug mască inpaint
+                        </summary>
+                        <img
+                            src={maskDebugUrl}
+                            alt="Mask debug"
+                            style={{
+                                display: "block",
+                                width: "100%",
+                                marginTop: 10,
+                                borderRadius: 14,
+                                border: "1px solid rgba(255,255,255,0.1)",
+                            }}
+                        />
+                    </details>
+                )}
             </section>
 
             <style jsx global>{`
