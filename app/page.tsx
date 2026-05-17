@@ -162,12 +162,14 @@ function getInpaintWorkAreaAspect(productType: ProductType, prompt: string, shap
         text.includes("hamburger") ||
         text.includes("pizza") ||
         text.includes("sandwich") ||
-        text.includes("hotdog")
+        text.includes("hotdog") ||
+        text.includes("donut") ||
+        text.includes("gogoasa")
     ) {
         return {
-            width: 1.55,
-            height: 0.95 + detail * 0.2,
-            roundness: 0.42,
+            width: 1.35,
+            height: 0.72 + detail * 0.18,
+            roundness: 0.34,
         };
     }
 
@@ -180,23 +182,25 @@ function getInpaintWorkAreaAspect(productType: ProductType, prompt: string, shap
         text.includes("pisica") ||
         text.includes("cat") ||
         text.includes("urs") ||
-        text.includes("bear")
+        text.includes("bear") ||
+        text.includes("mascota") ||
+        text.includes("animal")
     ) {
         return {
-            width: 1.0,
-            height: 1.35,
-            roundness: 0.35,
+            width: 0.82,
+            height: 1.22,
+            roundness: 0.28,
         };
     }
 
-    if (productType === "Arcadă") return { width: 1.55, height: 1.25, roundness: 0.18 };
-    if (productType === "Tunel") return { width: 1.45, height: 1.1, roundness: 0.22 };
-    if (productType === "Cort") return { width: 1.45, height: 1.05, roundness: 0.2 };
-    if (productType === "Cupolă") return { width: 1.35, height: 0.95, roundness: 0.45 };
-    if (productType === "Sticlă") return { width: 0.7, height: 1.65, roundness: 0.25 };
-    if (productType === "Mascotă") return { width: 1.0, height: 1.35, roundness: 0.35 };
+    if (productType === "Arcadă") return { width: 1.35, height: 1.08, roundness: 0.16 };
+    if (productType === "Tunel") return { width: 1.28, height: 0.98, roundness: 0.18 };
+    if (productType === "Cort") return { width: 1.32, height: 0.92, roundness: 0.18 };
+    if (productType === "Cupolă") return { width: 1.22, height: 0.82, roundness: 0.36 };
+    if (productType === "Sticlă") return { width: 0.56, height: 1.45, roundness: 0.2 };
+    if (productType === "Mascotă") return { width: 0.82, height: 1.22, roundness: 0.28 };
 
-    return { width: 1.1, height: 1.1, roundness: 0.35 };
+    return { width: 0.95, height: 0.95, roundness: 0.28 };
 }
 
 function makeProceduralInflatableSvgDataUrl(options: {
@@ -327,6 +331,7 @@ export default function Page() {
     const [posX, setPosX] = useState(58);
     const [posY, setPosY] = useState(92);
     const [overlayScale, setOverlayScale] = useState(32);
+    const [inpaintAreaScale, setInpaintAreaScale] = useState(118);
     const [rotation, setRotation] = useState(0);
 
     const defaultShadow = getDefaultShadowSettings(placementMode);
@@ -467,39 +472,54 @@ export default function Page() {
         ctx.fillStyle = "black";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const stageW = metrics.stageRect.width;
-        const stageH = metrics.stageRect.height;
-
-        const anchorStageX = (posX / 100) * stageW;
-        const anchorStageY = (posY / 100) * stageH;
+        const anchorStageX = (posX / 100) * metrics.stageRect.width;
+        const anchorStageY = (posY / 100) * metrics.stageRect.height;
 
         const imageX = ((anchorStageX - metrics.imageLeft) / metrics.imageWidth) * canvas.width;
         const imageY = ((anchorStageY - metrics.imageTop) / metrics.imageHeight) * canvas.height;
 
-        const displayedObjectWidthPx = (overlayScale / 100) * stageW;
+        const displayedObjectWidthPx = (overlayScale / 100) * metrics.imageWidth;
         const objectWidthInImagePx = (displayedObjectWidthPx / metrics.imageWidth) * canvas.width;
 
+        const areaMultiplier = inpaintAreaScale / 100;
         const aspect = getInpaintWorkAreaAspect(selectedProductType, subjectPrompt, shapeDetail);
 
+        const minMaskWidth = canvas.width * 0.045;
+        const maxMaskWidth = canvas.width * 0.45;
+        const minMaskHeight = canvas.height * 0.045;
+        const maxMaskHeight = canvas.height * 0.45;
+
         const workWidth = clamp(
-            objectWidthInImagePx * aspect.width,
-            canvas.width * 0.08,
-            canvas.width * 0.72
+            objectWidthInImagePx * aspect.width * areaMultiplier,
+            minMaskWidth,
+            maxMaskWidth
         );
 
         const workHeight = clamp(
-            objectWidthInImagePx * aspect.height,
-            canvas.height * 0.08,
-            canvas.height * 0.72
+            objectWidthInImagePx * aspect.height * areaMultiplier,
+            minMaskHeight,
+            maxMaskHeight
         );
 
-        const extraContactSpace = clamp(workHeight * 0.22, 28, 160);
-        const extraSideSpace = clamp(workWidth * 0.08, 16, 110);
+        const contactSpace = clamp(workHeight * 0.16, 12, canvas.height * 0.045);
+        const sideSpace = clamp(workWidth * 0.045, 6, canvas.width * 0.025);
 
-        const x = imageX - workWidth / 2 - extraSideSpace;
-        const y = imageY - workHeight - extraContactSpace * 0.35;
-        const w = workWidth + extraSideSpace * 2;
-        const h = workHeight + extraContactSpace;
+        const finalW = clamp(workWidth + sideSpace * 2, minMaskWidth, maxMaskWidth);
+        const finalH = clamp(workHeight + contactSpace, minMaskHeight, maxMaskHeight);
+
+        let x = imageX - finalW / 2;
+        let y = imageY - finalH + contactSpace * 0.62;
+
+        if (placementMode === "Suspendat") {
+            y = imageY - finalH / 2;
+        }
+
+        if (placementMode === "Pe fațadă") {
+            y = imageY - finalH / 2;
+        }
+
+        x = clamp(x, 0, canvas.width - finalW);
+        y = clamp(y, 0, canvas.height - finalH);
 
         ctx.save();
         ctx.translate(imageX, imageY);
@@ -508,23 +528,31 @@ export default function Page() {
 
         ctx.fillStyle = "white";
 
-        if (placementMode === "Pe fațadă") {
-            roundedRectPath(ctx, x, y, w, h, Math.min(w, h) * 0.22);
-            ctx.fill();
-        } else if (placementMode === "Suspendat") {
+        if (placementMode === "Suspendat") {
             ctx.beginPath();
-            ctx.ellipse(imageX, imageY - workHeight * 0.52, w * 0.52, h * 0.48, 0, 0, Math.PI * 2);
+            ctx.ellipse(
+                x + finalW / 2,
+                y + finalH / 2,
+                finalW * 0.5,
+                finalH * 0.48,
+                0,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+        } else if (placementMode === "Pe fațadă") {
+            roundedRectPath(ctx, x, y, finalW, finalH, Math.min(finalW, finalH) * 0.18);
             ctx.fill();
         } else {
-            roundedRectPath(ctx, x, y, w, h, Math.min(w, h) * aspect.roundness);
+            roundedRectPath(ctx, x, y, finalW, finalH, Math.min(finalW, finalH) * aspect.roundness);
             ctx.fill();
 
             ctx.beginPath();
             ctx.ellipse(
                 imageX,
-                imageY + extraContactSpace * 0.22,
-                w * 0.46,
-                extraContactSpace * 0.45,
+                clamp(imageY + contactSpace * 0.14, 0, canvas.height),
+                finalW * 0.38,
+                contactSpace * 0.46,
                 0,
                 0,
                 Math.PI * 2
@@ -642,6 +670,7 @@ export default function Page() {
                     },
                     adjustments: {
                         scalePercent: overlayScale,
+                        inpaintAreaScale,
                         rotationDeg: rotation,
                         shadowX,
                         shadowY,
@@ -1139,6 +1168,23 @@ export default function Page() {
                             />
 
                             <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                                <div className="aztec-label">Mărime zonă inpaint</div>
+                                <div className="aztec-slider-value">{inpaintAreaScale}%</div>
+                            </div>
+
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={80}
+                                max={180}
+                                value={inpaintAreaScale}
+                                onChange={(e) => {
+                                    setInpaintAreaScale(Number(e.target.value));
+                                    clearResults();
+                                }}
+                            />
+
+                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
                                 <div className="aztec-label">Rotație</div>
                                 <div className="aztec-slider-value">{rotation}°</div>
                             </div>
@@ -1173,9 +1219,9 @@ export default function Page() {
                             />
 
                             <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                În FOTO / REPLICĂ masca este acum zonă de lucru generoasă,
-                                nu contur fix de obiect. Asta lasă AI-ul să creeze forma,
-                                contactul și umbra în interiorul zonei.
+                                Scală pe imagine controlează mărimea obiectului. Mărime zonă inpaint
+                                controlează cât spațiu primește AI-ul pentru obiect, contact și umbră.
+                                Recomandat: Scală 28–35%, zonă inpaint 110–130%.
                             </div>
                         </div>
                     </section>
@@ -1341,7 +1387,7 @@ export default function Page() {
                                         lineHeight: 1.4,
                                     }}
                                 >
-                                    În mod FOTO / REPLICĂ se trimite zonă generoasă
+                                    În mod FOTO / REPLICĂ se trimite zonă compactă
                                     pentru inpaint.
                                 </div>
                             </div>
