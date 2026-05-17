@@ -4,9 +4,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 export const maxDuration = 60;
 
 type GenerateMode = "rapid" | "photo" | "replica";
+type RenderPipeline = "overlay" | "inpaint";
 
 type RequestBody = {
     sceneImage?: string;
+    maskImage?: string | null;
     refImage?: string | null;
     textureImage?: string | null;
     prompt?: string;
@@ -14,6 +16,7 @@ type RequestBody = {
     productPreset?: string;
     productType?: string;
     placementMode?: string;
+    renderPipeline?: RenderPipeline;
     generateMode?: GenerateMode;
     referenceControl?: {
         respectReference?: number;
@@ -35,12 +38,35 @@ type RequestBody = {
     placement?: {
         x?: number;
         y?: number;
+        anchor?: string;
+    };
+    adjustments?: {
+        scalePercent?: number;
+        rotationDeg?: number;
+        shadowX?: number;
+        shadowY?: number;
+        shadowScaleX?: number;
+        shadowScaleY?: number;
+        shadowBlur?: number;
+        shadowOpacity?: number;
+        shadowSkew?: number;
+        objectBrightness?: number;
+        objectContrast?: number;
+        objectWarmth?: number;
+        objectOpacity?: number;
     };
 };
 
 function base64ToBlob(base64: string, type = "image/jpeg") {
-    const buffer = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    return new Blob([buffer], { type });
+    const clean = base64.includes(",") ? base64.split(",")[1] : base64;
+    const binary = atob(clean);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+
+    return new Blob([bytes], { type });
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -68,6 +94,11 @@ function isFoodSubject(text: string) {
     );
 }
 
+function isBurgerSubject(text: string) {
+    const t = normalizeText(text);
+    return t.includes("burger") || t.includes("hamburger");
+}
+
 function shouldUseReferenceAsInitImage(options: {
     refImage?: string | null;
     generateMode: GenerateMode;
@@ -90,7 +121,6 @@ function shouldUseReferenceAsInitImage(options: {
     const combined = `${productType || ""} ${userPrompt || ""}`;
 
     if (shapeDetail <= 50) return false;
-
     if (isFoodSubject(combined) && respectReference < 97) return false;
 
     if (generateMode === "replica" && respectReference >= 90 && shapeDetail >= 65) {
@@ -104,10 +134,62 @@ function shouldUseReferenceAsInitImage(options: {
     return false;
 }
 
-function getProductTypePrompt(productType?: string, userPrompt?: string, shapeDetail = 35) {
+function getProductTypePrompt(
+    productType?: string,
+    userPrompt?: string,
+    shapeDetail = 35,
+    pipeline: RenderPipeline = "overlay"
+) {
     const base = normalizeText(`${productType || ""} ${userPrompt || ""}`);
 
     if (base.includes("burger") || base.includes("hamburger")) {
+        if (pipeline === "inpaint") {
+            if (shapeDetail <= 15) {
+                return `
+PRODUCT TYPE: SIMPLIFIED GIANT INFLATABLE HAMBURGER.
+
+Mandatory result:
+- create a clearly recognizable hamburger-shaped inflatable object;
+- simplified silhouette, not abstract;
+- smooth inflated bun volumes;
+- broad simplified printed color bands for patty / cheese / salad / tomato;
+- no tiny lettuce leaves;
+- no real food material;
+- no edible burger photography;
+- no hyper-detailed ingredients;
+- make it look like a PVC inflatable advertising object placed inside the masked area;
+- the base must visually touch the surface and cast a believable contact shadow.
+`.trim();
+            }
+
+            if (shapeDetail <= 35) {
+                return `
+PRODUCT TYPE: CLEAN INFLATABLE HAMBURGER REPLICA.
+
+Mandatory result:
+- recognizable hamburger inflatable;
+- simple large inflated bun forms;
+- simplified ingredient bands;
+- limited medium details only;
+- avoid tiny leaf geometry and realistic food texture;
+- use glossy PVC printed surface;
+- generate realistic contact with the scene surface and natural shadow.
+`.trim();
+            }
+
+            return `
+PRODUCT TYPE: GIANT INFLATABLE HAMBURGER PROMOTIONAL REPLICA.
+
+Mandatory result:
+- recognizable hamburger inflatable object;
+- rounded air-filled bun, patty, cheese and salad elements;
+- PVC surface with printed texture;
+- realistic commercial inflatable, not edible food;
+- fabricable simplified geometry;
+- integrated contact shadows and scene lighting.
+`.trim();
+        }
+
         if (shapeDetail <= 10) {
             return `
 PRODUCT TYPE: ABSTRACT SIMPLE INFLATABLE BURGER SIGN.
@@ -117,7 +199,6 @@ Mandatory low-detail result:
 - Do NOT build visible individual ingredients.
 - Do NOT make lettuce, meat, cheese, tomato, sesame or bun as physical 3D geometry.
 - Make one simple rounded flattened ellipsoid / pillow / oval balloon.
-- The outer contour must be almost a clean oval.
 - Burger identity must come only from broad printed horizontal color bands on the PVC surface.
 - Think: a smooth inflatable oval sign printed like a burger, not a sculptural burger.
 `.trim();
@@ -236,7 +317,41 @@ Mandatory geometry:
 `.trim();
 }
 
-function getModePrompt(mode: GenerateMode, respectReference: number) {
+function getModePrompt(
+    mode: GenerateMode,
+    respectReference: number,
+    pipeline: RenderPipeline
+) {
+    if (pipeline === "inpaint") {
+        if (mode === "replica" || respectReference >= 86) {
+            return `
+GENERATION MODE: REALISTIC INPAINTED PRODUCT REPLICA.
+
+Rules:
+- edit only the masked area;
+- preserve the original photograph outside the mask;
+- create a believable commercial inflatable object inside the mask;
+- match the camera perspective of the scene;
+- match the lighting direction and exposure of the scene;
+- create realistic contact shadows on the surface;
+- the object must look physically placed in the real photo;
+- do not alter building, pavement, vegetation, signs or background outside the object zone.
+`.trim();
+        }
+
+        return `
+GENERATION MODE: REALISTIC PHOTO INPAINT.
+
+Rules:
+- edit only the masked zone;
+- preserve the original image outside the mask;
+- insert a commercial inflatable object;
+- match scene lighting, perspective and contact shadows;
+- do not create a transparent overlay;
+- generate the final integrated photo.
+`.trim();
+    }
+
     if (mode === "replica" || respectReference >= 86) {
         return `
 GENERATION MODE: CONTROLLED INFLATABLE REPLICA.
@@ -286,6 +401,7 @@ function getReferencePrompt(options: {
     hasTextureImage: boolean;
     usingRefAsInitImage: boolean;
     shapeDetail: number;
+    pipeline: RenderPipeline;
 }) {
     const {
         respectReference,
@@ -297,6 +413,7 @@ function getReferencePrompt(options: {
         hasTextureImage,
         usingRefAsInitImage,
         shapeDetail,
+        pipeline,
     } = options;
 
     let prompt = `
@@ -304,6 +421,7 @@ REFERENCE CONTROL:
 Reference strength: ${respectReference}/100.
 Reference direct image-to-image: ${usingRefAsInitImage ? "ON" : "OFF"}.
 Shape detail level: ${shapeDetail}/100.
+Pipeline: ${pipeline}.
 `.trim();
 
     if (hasRefImage) {
@@ -332,35 +450,57 @@ Use it as product design reference only.`;
 - preserve branding placement only if clearly visible; do not invent random text;`;
         }
 
-        if (shapeDetail <= 10) {
-            prompt += `
+        if (pipeline === "inpaint") {
+            if (shapeDetail <= 15) {
+                prompt += `
+- simplify the reference heavily but keep the object recognizable;
+- do not make it abstract;
+- avoid small physical details;
+- use broad inflated forms and printed PVC color zones;`;
+            } else if (shapeDetail <= 35) {
+                prompt += `
+- preserve main recognizable forms;
+- simplify small details into printed PVC graphics;
+- keep a clean inflatable silhouette;`;
+            } else if (shapeDetail <= 70) {
+                prompt += `
+- preserve recognizable medium details;
+- convert complex details into fabricable PVC panels;`;
+            } else {
+                prompt += `
+- preserve the reference form closely but keep it fabricable as PVC inflatable;`;
+            }
+        } else {
+            if (shapeDetail <= 10) {
+                prompt += `
 - override the reference geometry almost completely;
 - keep only a very broad subject identity;
 - convert the object into a smooth, flattened, rounded ellipsoid / oval pillow;
 - physical reference details must disappear;
 - reference colors may become broad printed bands on the surface;
 - the outer 2D contour must be extremely simple and clean;`;
-        } else if (shapeDetail <= 25) {
-            prompt += `
+            } else if (shapeDetail <= 25) {
+                prompt += `
 - simplify the reference into one or a few large rounded inflatable masses;
 - preserve only the main silhouette and major color zones;
 - remove small physical details completely;
 - convert small details into flat printed graphics;`;
-        } else if (shapeDetail <= 45) {
-            prompt += `
+            } else if (shapeDetail <= 45) {
+                prompt += `
 - simplify the reference into clean large inflatable volumes;
 - preserve main recognizable forms;
 - convert small details into printed graphics, not 3D relief;`;
-        } else if (shapeDetail <= 70) {
-            prompt += `
+            } else if (shapeDetail <= 70) {
+                prompt += `
 - preserve main recognizable forms and some medium details;
 - simplify small details into PVC print or broad shapes;`;
-        } else if (shapeDetail <= 90) {
-            prompt += `
+            } else if (shapeDetail <= 90) {
+                prompt += `
 - preserve most of the reference form while converting details into PVC panels and printed graphics;`;
-        } else {
-            prompt += `
+            } else {
+                prompt += `
 - preserve the reference form closely, but still make it fabricable as a real inflatable object;`;
+            }
         }
 
         prompt += `
@@ -433,7 +573,45 @@ Realistic commercial inflatable PVC.
 `.trim();
 }
 
-function getLightingPrompt(lighting: string, material: string) {
+function getLightingPrompt(lighting: string, material: string, pipeline: RenderPipeline) {
+    if (pipeline === "inpaint") {
+        if (lighting === "Noapte") {
+            return `
+LIGHTING:
+Match a night-composite result.
+If the source photograph is daylight, still make the object visually compatible with the chosen night setting inside the mask, but do not darken the whole original photo.
+If material is LED interior or translucent, create soft internal glow and believable local illumination.
+Use realistic contact shadows.
+`.trim();
+        }
+
+        if (lighting === "Golden hour") {
+            return `
+LIGHTING:
+Match warm golden-hour object lighting.
+Use warm highlights and realistic directional shadow.
+Preserve the original photo outside the mask.
+`.trim();
+        }
+
+        if (lighting === "Interior") {
+            return `
+LIGHTING:
+Match indoor style object lighting.
+Soft ambient reflections, realistic contact shadow.
+Preserve the original photo outside the mask.
+`.trim();
+        }
+
+        return `
+LIGHTING:
+Match the actual daylight visible in the source photograph.
+Use consistent direction, exposure and contrast.
+Create a natural contact shadow on the surface.
+Preserve the original photo outside the mask.
+`.trim();
+    }
+
     if (lighting === "Noapte") {
         return `
 LIGHTING:
@@ -482,7 +660,89 @@ No dark night exposure.
 `.trim();
 }
 
-function getShapeDetailPrompt(shapeDetail: number) {
+function getShapeDetailPrompt(
+    shapeDetail: number,
+    userPrompt: string,
+    productType: string,
+    pipeline: RenderPipeline
+) {
+    const subject = `${userPrompt} ${productType}`;
+    const burgerLike = isBurgerSubject(subject);
+
+    if (pipeline === "inpaint") {
+        if (shapeDetail <= 10) {
+            if (burgerLike) {
+                return `
+FORM COMPLEXITY:
+LOW DETAIL BUT RECOGNIZABLE.
+
+For this hamburger:
+- keep a clearly readable hamburger silhouette;
+- use simplified inflated bun volumes and broad horizontal ingredient bands;
+- no tiny leaf details;
+- no real food microtexture;
+- no complex stacked sculptural ingredients;
+- make it a clean PVC inflatable hamburger, not an abstract oval;
+- contact with the surface must be visible.
+`.trim();
+            }
+
+            return `
+FORM COMPLEXITY:
+LOW DETAIL BUT RECOGNIZABLE.
+
+Use large simple inflated forms.
+Avoid small physical details.
+Keep the object identity clear.
+Make it a real PVC inflatable placed naturally in the scene.
+`.trim();
+        }
+
+        if (shapeDetail <= 25) {
+            return `
+FORM COMPLEXITY:
+SIMPLE COMMERCIAL INFLATABLE.
+
+Use clean rounded inflated volumes.
+Keep subject identity clear.
+Use only broad medium details.
+Avoid micro-details and jagged silhouette.
+Generate realistic scene contact and shadows.
+`.trim();
+        }
+
+        if (shapeDetail <= 55) {
+            return `
+FORM COMPLEXITY:
+BALANCED INFLATABLE.
+
+Use recognizable details but keep everything fabricable.
+Complex details should become printed PVC graphics or broad inflated panels.
+Natural contact shadow and scene integration are mandatory.
+`.trim();
+        }
+
+        if (shapeDetail <= 80) {
+            return `
+FORM COMPLEXITY:
+DETAILED INFLATABLE.
+
+Preserve important subject details.
+Use PVC seams and realistic printed texture.
+Avoid edible/rigid object appearance.
+Integrate perspective and contact shadows.
+`.trim();
+        }
+
+        return `
+FORM COMPLEXITY:
+HIGH DETAIL INFLATABLE REPLICA.
+
+Close recognizable replica while staying PVC-inflatable and manufacturable.
+Use realistic commercial inflatable finish, integrated into the photo.
+`.trim();
+    }
+
     if (shapeDetail <= 5) {
         return `
 FORM COMPLEXITY:
@@ -502,17 +762,6 @@ Required silhouette:
 - no jagged edges;
 - no small elements;
 - no raised details.
-
-For a burger:
-- create a single smooth rounded squashed oval balloon;
-- print broad horizontal color bands on it to suggest bun / filling / bun;
-- do not model lettuce;
-- do not model patty;
-- do not model cheese;
-- do not model sesame;
-- do not model tomato;
-- do not stack layers;
-- the object should read like a burger-themed oval inflatable sign, not a burger model.
 
 TEXTURE:
 Photorealistic printed PVC texture is allowed.
@@ -537,22 +786,6 @@ No thin geometry.
 No tiny protrusions.
 No detailed relief.
 All small details must become flat printed color/texture on the PVC surface.
-
-For a burger:
-- use a squashed rounded bun-like ellipsoid;
-- broad printed color bands may suggest ingredients;
-- no physical lettuce leaves, detailed meat or real sesame geometry.
-
-TEXTURE:
-Texture may still be photorealistic as printed PVC color/material.
-Photorealistic material is allowed.
-Photorealistic complex geometry is not allowed.
-
-PVC FEEL:
-Subtle PVC tension only.
-Almost invisible wrinkles.
-No deep folds.
-No rough food texture.
 `.trim();
     }
 
@@ -566,15 +799,6 @@ Clear readable silhouette.
 Very few geometry parts.
 Secondary details must be printed, not modeled.
 The object should look like a classic advertising inflatable made from big PVC volumes.
-
-TEXTURE:
-Surface can have photorealistic printed color/material.
-Geometry remains simple and rounded.
-
-PVC FEEL:
-Only subtle PVC tension marks.
-No deep folds.
-No complex surface relief.
 `.trim();
     }
 
@@ -586,14 +810,6 @@ SIMPLE COMMERCIAL INFLATABLE FORM.
 Use large rounded inflated volumes.
 Preserve subject identity, but simplify secondary details.
 Small details should become printed graphics or simplified soft PVC forms.
-
-TEXTURE:
-Photorealistic printed PVC surface is allowed.
-Do not make the geometry overly detailed.
-
-PVC FEEL:
-Only subtle tension wrinkles near seams and edges.
-No deep folds.
 `.trim();
     }
 
@@ -605,12 +821,6 @@ BALANCED INFLATABLE FORM.
 Preserve recognizable subject proportions and medium-size details.
 Convert complex details into fabricable PVC panel logic.
 Keep the shape clean and stable.
-
-TEXTURE:
-Photorealistic printed surface and PVC highlights.
-
-PVC FEEL:
-Subtle PVC tension, mild seam definition, no excessive fabric folding.
 `.trim();
     }
 
@@ -622,13 +832,6 @@ DETAILED INFLATABLE FORM.
 Preserve most important silhouette details and reference features.
 Use welded PVC panel logic for detail.
 Keep fabricability and stable air-filled construction.
-
-TEXTURE:
-Photorealistic PVC surface and printed texture allowed.
-
-PVC FEEL:
-Controlled subtle PVC tension only.
-Do not create damaged or deflated wrinkles.
 `.trim();
     }
 
@@ -639,14 +842,6 @@ VERY DETAILED INFLATABLE REPLICA.
 Preserve the reference shape closely where possible.
 Keep the object manufacturable as PVC inflatable panels.
 Complex details should still be simplified into inflatable construction or printed surface graphics.
-
-TEXTURE:
-Photorealistic PVC surface and printed texture allowed.
-
-PVC FEEL:
-Subtle PVC tension marks only.
-No chaotic folds.
-No deflated fabric.
 `.trim();
 }
 
@@ -664,11 +859,59 @@ Length / depth: ${depthM.toFixed(1)} meters.
 Rules:
 - Respect the height / width / length ratio in the generated object.
 - These are product dimensions, not background dimensions.
-- Frontend handles final placement and scale over the photo.
 `.trim();
 }
 
-function getPlacementPrompt(placementMode?: string) {
+function getPlacementPrompt(placementMode?: string, pipeline: RenderPipeline = "overlay") {
+    if (pipeline === "inpaint") {
+        if (placementMode === "Pe acoperiș") {
+            return `
+PLACEMENT INTENT:
+The object is placed on a roof or elevated building surface inside the masked area.
+Its bottom must visually touch the rooftop/surface.
+Generate realistic contact shadow directly under the object.
+Do not make it float.
+Do not change the unmasked building or background.
+`.trim();
+        }
+
+        if (placementMode === "Pe sol") {
+            return `
+PLACEMENT INTENT:
+The object is placed on the ground inside the masked area.
+Its base must visibly touch the ground.
+Generate realistic contact shadow and grounding.
+Do not make it float.
+`.trim();
+        }
+
+        if (placementMode === "Pe fațadă") {
+            return `
+PLACEMENT INTENT:
+The object is mounted on a vertical facade inside the masked area.
+Generate wall contact shadow and correct vertical perspective.
+Do not make it float away from the wall.
+`.trim();
+        }
+
+        if (placementMode === "Suspendat") {
+            return `
+PLACEMENT INTENT:
+The object is suspended or floating inside the masked area.
+Use subtle believable shadow below it.
+Do not add cables unless explicitly requested.
+`.trim();
+        }
+
+        if (placementMode === "În interior") {
+            return `
+PLACEMENT INTENT:
+The object is placed inside an interior scene.
+Use indoor-style contact shadow and ambient lighting.
+`.trim();
+        }
+    }
+
     if (placementMode === "Pe acoperiș") {
         return `
 PLACEMENT INTENT:
@@ -725,6 +968,7 @@ function getNegativePrompt(options: {
     lighting: string;
     userPrompt: string;
     productType: string;
+    pipeline: RenderPipeline;
 }) {
     const {
         generateMode,
@@ -733,29 +977,23 @@ function getNegativePrompt(options: {
         lighting,
         userPrompt,
         productType,
+        pipeline,
     } = options;
 
     let negative = `
-background,
-building,
-street,
-sky,
-ground,
 people,
 cars,
-trees,
-environment,
-photo background,
-changed background,
-modified background photo,
+extra objects,
+unrelated object,
+watermark,
+random text,
+misspelled text,
+logo artifacts,
 normal real object,
 real food,
 real edible burger,
 food photography,
 wet food texture,
-real meat texture,
-real lettuce texture,
-real sesame geometry,
 hard sculpture,
 rigid plastic,
 metal,
@@ -763,17 +1001,6 @@ stone,
 wood,
 paper,
 cardboard,
-cropped object,
-cut off object,
-bad transparent edges,
-low resolution,
-blurry,
-distorted perspective,
-wrong scale,
-watermark,
-random text,
-misspelled text,
-logo artifacts,
 deflated fabric,
 damaged fabric,
 dirty PVC,
@@ -784,64 +1011,61 @@ jagged silhouette,
 sharp irregular edge,
 thin protrusions,
 complex cutouts,
-high frequency geometry
+wrong scale,
+bad perspective,
+floating object,
+object not touching surface,
+no contact shadow
 `.trim();
 
-    if (shapeDetail <= 5) {
+    if (pipeline === "overlay") {
         negative += `,
-detailed burger,
-burger model,
-stacked burger,
-stacked layers,
-separate bun,
-separate lettuce,
-separate patty,
-separate cheese,
-separate tomato,
-lettuce leaves,
-detailed lettuce,
-detailed meat,
-burger patty relief,
-sesame seed geometry,
-cheese triangles protruding,
-ingredient geometry,
-many parts,
-many layers,
-complex object,
-complex shape,
-small geometry,
+background,
+building,
+street,
+sky,
+ground,
+trees,
+environment,
+photo background,
+changed background,
+modified background photo,
+cropped object,
+cut off object,
+bad transparent edges`;
+    } else {
+        negative += `,
+changing unmasked background,
+altered building outside mask,
+changed windows outside mask,
+changed pavement outside mask,
+changed vegetation outside mask,
+duplicated architecture,
+distorted facade,
+smearing background`;
+    }
+
+    if (shapeDetail <= 10) {
+        if (isBurgerSubject(`${userPrompt} ${productType}`) && pipeline === "inpaint") {
+            negative += `,
+abstract oval,
+unrecognizable food,
+plain ball,
+plain sphere,
+real restaurant burger,
+hyper-detailed lettuce,
+tiny sesame seeds,
+tiny ingredient details,
+floating burger,
+no shadow`;
+        } else {
+            negative += `,
 tiny details,
 fine detail,
-jagged food outline,
-realistic food shape,
-bumpy surface,
-rough surface,
-seam-heavy construction,
-wrinkled fabric,
-irregular silhouette,
-sculptural burger,
-3d food replica`;
-    } else if (shapeDetail <= 15) {
-        negative += `,
-detailed geometry,
-small geometry,
-many parts,
-many layers,
-complex shape,
-realistic food shape,
-realistic burger geometry,
-detailed lettuce,
-detailed meat,
-detailed sesame seeds,
-wrinkled fabric,
-seam-heavy construction,
-bumpy surface,
-rough surface,
-thin edges,
-irregular silhouette,
-jagged food outline,
-tiny details,
-fine detail`;
+complex surface,
+jagged contour,
+thin detail`;
+        }
     } else if (shapeDetail <= 30) {
         negative += `,
 many small details,
@@ -849,9 +1073,7 @@ complex noisy surface,
 overdetailed geometry,
 high frequency detail,
 tiny parts,
-complex topology,
-realistic food geometry,
-jagged food edge`;
+complex topology`;
     } else if (shapeDetail <= 50) {
         negative += `,
 overdetailed geometry,
@@ -863,16 +1085,13 @@ noisy silhouette`;
 
     if (lighting === "Noapte") {
         negative += `,
-daylight,
-sunny shadows,
-bright noon lighting,
-daytime product render`;
+sunny object,
+bright noon object lighting`;
     }
 
     if (lighting === "Zi") {
         negative += `,
 night lighting,
-dark night exposure,
 neon glow`;
     }
 
@@ -883,13 +1102,11 @@ real hamburger,
 restaurant food,
 edible food,
 hyperrealistic food photo,
-food photography,
 food macro texture`;
     }
 
     if (generateMode === "replica" || respectReference >= 88) {
         negative += `,
-unrelated object,
 ignoring requested subject`;
     }
 
@@ -946,11 +1163,167 @@ No markdown.
     }
 }
 
+async function generateOverlayImage(options: {
+    stabilityKey: string;
+    refImage?: string | null;
+    finalPrompt: string;
+    negativePrompt: string;
+    usingRefAsInitImage: boolean;
+    respectReference: number;
+    shapeDetailValue: number;
+}) {
+    const {
+        stabilityKey,
+        refImage,
+        finalPrompt,
+        negativePrompt,
+        usingRefAsInitImage,
+        respectReference,
+        shapeDetailValue,
+    } = options;
+
+    const formData = new FormData();
+    formData.append("prompt", finalPrompt);
+    formData.append("negative_prompt", negativePrompt);
+    formData.append("output_format", "png");
+
+    if (usingRefAsInitImage && refImage) {
+        const refBlob = base64ToBlob(refImage, "image/jpeg");
+        formData.append("image", refBlob, "reference.jpg");
+        formData.append("mode", "image-to-image");
+
+        const strength =
+            respectReference >= 96 && shapeDetailValue >= 75
+                ? "0.26"
+                : respectReference >= 90 && shapeDetailValue >= 60
+                  ? "0.32"
+                  : "0.42";
+
+        formData.append("strength", strength);
+    } else {
+        formData.append("aspect_ratio", "1:1");
+    }
+
+    const generateResponse = await fetch(
+        "https://api.stability.ai/v2beta/stable-image/generate/core",
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${stabilityKey}`,
+                Accept: "application/json",
+            },
+            body: formData,
+        }
+    );
+
+    if (!generateResponse.ok) {
+        const errorText = await generateResponse.text();
+        throw new Error(`Eroare Stability Generate: ${errorText}`);
+    }
+
+    const generatedData = await generateResponse.json();
+
+    if (!generatedData.image) {
+        throw new Error("Stability nu a returnat nicio imagine.");
+    }
+
+    const generatedBlob = base64ToBlob(generatedData.image, "image/png");
+
+    const bgFormData = new FormData();
+    bgFormData.append("image", generatedBlob, "generated.png");
+    bgFormData.append("output_format", "png");
+
+    const bgResponse = await fetch(
+        "https://api.stability.ai/v2beta/stable-image/edit/remove-background",
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${stabilityKey}`,
+                Accept: "application/json",
+            },
+            body: bgFormData,
+        }
+    );
+
+    if (!bgResponse.ok) {
+        return {
+            overlayUrl: `data:image/png;base64,${generatedData.image}`,
+            warning: "Remove background failed; using original generated image.",
+        };
+    }
+
+    const bgData = await bgResponse.json();
+    const finalImageBase64 = bgData.image || bgData.base64;
+
+    if (!finalImageBase64) {
+        return {
+            overlayUrl: `data:image/png;base64,${generatedData.image}`,
+            warning:
+                "Remove background nu a returnat imagine; se folosește imaginea generată inițial.",
+        };
+    }
+
+    return {
+        overlayUrl: `data:image/png;base64,${finalImageBase64}`,
+    };
+}
+
+async function generateInpaintImage(options: {
+    stabilityKey: string;
+    sceneImage: string;
+    maskImage: string;
+    finalPrompt: string;
+    negativePrompt: string;
+}) {
+    const { stabilityKey, sceneImage, maskImage, finalPrompt, negativePrompt } =
+        options;
+
+    const imageBlob = base64ToBlob(sceneImage, "image/jpeg");
+    const maskBlob = base64ToBlob(maskImage, "image/png");
+
+    const formData = new FormData();
+    formData.append("image", imageBlob, "scene.jpg");
+    formData.append("mask", maskBlob, "mask.png");
+    formData.append("prompt", finalPrompt);
+    formData.append("negative_prompt", negativePrompt);
+    formData.append("output_format", "png");
+
+    const response = await fetch(
+        "https://api.stability.ai/v2beta/stable-image/edit/inpaint",
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${stabilityKey}`,
+                Accept: "application/json",
+            },
+            body: formData,
+        }
+    );
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Eroare Stability Inpaint: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const imageBase64 = data.image || data.base64;
+
+    if (!imageBase64) {
+        throw new Error("Stability Inpaint nu a returnat imagine.");
+    }
+
+    return {
+        resultSceneUrl: `data:image/png;base64,${imageBase64}`,
+    };
+}
+
 export async function POST(req: Request) {
     try {
         const body = (await req.json()) as RequestBody;
 
         const {
+            sceneImage,
+            maskImage,
             refImage,
             textureImage,
             prompt = "commercial inflatable product",
@@ -958,12 +1331,15 @@ export async function POST(req: Request) {
             productPreset = "",
             productType = "Custom",
             placementMode = "Pe sol",
+            renderPipeline,
             generateMode = "photo",
             referenceControl,
             dimensions,
             material = "PVC lucios",
             lighting = "Zi",
             shapeDetail = 35,
+            placement,
+            adjustments,
         } = body;
 
         const stabilityKey = process.env.STABILITY_API_KEY;
@@ -972,6 +1348,24 @@ export async function POST(req: Request) {
         if (!stabilityKey) {
             return NextResponse.json(
                 { error: "Lipsește STABILITY_API_KEY în Vercel." },
+                { status: 400 }
+            );
+        }
+
+        const pipeline: RenderPipeline =
+            renderPipeline ||
+            (generateMode === "rapid" ? "overlay" : "inpaint");
+
+        if (pipeline === "inpaint" && !sceneImage) {
+            return NextResponse.json(
+                { error: "Pentru inpaint lipsește sceneImage." },
+                { status: 400 }
+            );
+        }
+
+        if (pipeline === "inpaint" && !maskImage) {
+            return NextResponse.json(
+                { error: "Pentru inpaint lipsește maskImage." },
                 { status: 400 }
             );
         }
@@ -988,14 +1382,16 @@ export async function POST(req: Request) {
         const respectBranding = referenceControl?.respectBranding ?? true;
         const shapeDetailValue = clamp(Number(shapeDetail), 0, 100);
 
-        const usingRefAsInitImage = shouldUseReferenceAsInitImage({
-            refImage,
-            generateMode,
-            respectReference,
-            productType,
-            userPrompt,
-            shapeDetail: shapeDetailValue,
-        });
+        const usingRefAsInitImage =
+            pipeline === "overlay" &&
+            shouldUseReferenceAsInitImage({
+                refImage,
+                generateMode,
+                respectReference,
+                productType,
+                userPrompt,
+                shapeDetail: shapeDetailValue,
+            });
 
         const geminiAnalysis = refImage
             ? await analyzeReferenceWithGemini(refImage, googleKey)
@@ -1012,12 +1408,27 @@ Inflatable conversion: ${geminiAnalysis.inflatable_conversion}
 `
             : "";
 
-        const finalPrompt = `
+        const inpaintIntro =
+            pipeline === "inpaint"
+                ? `
+TASK:
+Edit the original photograph only inside the white masked area.
+Insert the requested commercial inflatable object into that masked region.
+The final output must be a full photo, not a transparent PNG.
+The original background outside the masked area must remain unchanged.
+The inserted object must touch the marked surface naturally and cast realistic contact shadows.
+Respect the base-center placement implied by the mask.
+`
+                : `
+TASK:
 Generate ONLY a transparent PNG overlay of a commercial inflatable object.
-
 DO NOT generate any background.
 DO NOT use or modify the uploaded scene photo.
 The background photo is handled only by the frontend and must remain unchanged.
+`;
+
+        const finalPrompt = `
+${inpaintIntro}
 
 USER REQUEST:
 ${userPrompt}
@@ -1028,11 +1439,11 @@ ${prompt}
 PRODUCT PRESET:
 ${productPreset}
 
-${getProductTypePrompt(productType, userPrompt, shapeDetailValue)}
+${getProductTypePrompt(productType, userPrompt, shapeDetailValue, pipeline)}
 
-${getPlacementPrompt(placementMode)}
+${getPlacementPrompt(placementMode, pipeline)}
 
-${getModePrompt(generateMode, respectReference)}
+${getModePrompt(generateMode, respectReference, pipeline)}
 
 ${getReferencePrompt({
     respectReference,
@@ -1044,6 +1455,7 @@ ${getReferencePrompt({
     hasTextureImage: Boolean(textureImage),
     usingRefAsInitImage,
     shapeDetail: shapeDetailValue,
+    pipeline,
 })}
 
 ${geminiPrompt}
@@ -1052,11 +1464,35 @@ ${getDimensionsPrompt(dimensions)}
 
 ${getMaterialPrompt(material)}
 
-${getLightingPrompt(lighting, material)}
+${getLightingPrompt(lighting, material, pipeline)}
 
-${getShapeDetailPrompt(shapeDetailValue)}
+${getShapeDetailPrompt(shapeDetailValue, userPrompt, productType, pipeline)}
 
-ABSOLUTE OUTPUT:
+PLACEMENT DATA:
+- placement mode: ${placementMode}
+- anchor: ${placement?.anchor || "base-center"}
+- position x: ${placement?.x ?? "unknown"}%
+- position y: ${placement?.y ?? "unknown"}%
+- scale percent: ${adjustments?.scalePercent ?? "unknown"}%
+- rotation: ${adjustments?.rotationDeg ?? 0} degrees
+
+ABSOLUTE OUTPUT RULES:
+${
+    pipeline === "inpaint"
+        ? `
+- output is a complete edited photograph;
+- modify only the masked area;
+- keep all unmasked pixels visually unchanged;
+- object must be inside the masked area;
+- object must not float unless placement mode is Suspendat;
+- create realistic local contact shadow;
+- match perspective and focal length of the original photograph;
+- match lighting and exposure of the original photograph;
+- no extra people;
+- no extra vehicles;
+- no changed building geometry outside mask.
+`
+        : `
 - one single inflatable object;
 - transparent background;
 - complete object, not cropped;
@@ -1074,6 +1510,8 @@ ABSOLUTE OUTPUT:
 - no real food;
 - if subject is food and detail is low, create a flattened ellipsoid printed as that food;
 - clean edges suitable for compositing over a photo.
+`
+}
 `.trim();
 
         const negativePrompt = getNegativePrompt({
@@ -1083,114 +1521,59 @@ ABSOLUTE OUTPUT:
             lighting,
             userPrompt,
             productType,
+            pipeline,
         });
 
-        const formData = new FormData();
-        formData.append("prompt", finalPrompt);
-        formData.append("negative_prompt", negativePrompt);
-        formData.append("output_format", "png");
-
-        if (usingRefAsInitImage && refImage) {
-            const refBlob = base64ToBlob(refImage, "image/jpeg");
-            formData.append("image", refBlob, "reference.jpg");
-            formData.append("mode", "image-to-image");
-
-            const strength =
-                respectReference >= 96 && shapeDetailValue >= 75
-                    ? "0.26"
-                    : respectReference >= 90 && shapeDetailValue >= 60
-                      ? "0.32"
-                      : "0.42";
-
-            formData.append("strength", strength);
-        } else {
-            formData.append("aspect_ratio", "1:1");
-        }
-
-        const generateResponse = await fetch(
-            "https://api.stability.ai/v2beta/stable-image/generate/core",
-            {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${stabilityKey}`,
-                    Accept: "application/json",
-                },
-                body: formData,
-            }
-        );
-
-        if (!generateResponse.ok) {
-            const errorText = await generateResponse.text();
-
-            return NextResponse.json(
-                {
-                    error: `Eroare Stability Generate: ${errorText}`,
-                    prompt: finalPrompt,
-                    negativePrompt,
-                },
-                { status: 400 }
-            );
-        }
-
-        const generatedData = await generateResponse.json();
-
-        if (!generatedData.image) {
-            return NextResponse.json(
-                {
-                    error: "Stability nu a returnat nicio imagine.",
-                    raw: generatedData,
-                },
-                { status: 500 }
-            );
-        }
-
-        const generatedBlob = base64ToBlob(generatedData.image, "image/png");
-
-        const bgFormData = new FormData();
-        bgFormData.append("image", generatedBlob, "generated.png");
-        bgFormData.append("output_format", "png");
-
-        const bgResponse = await fetch(
-            "https://api.stability.ai/v2beta/stable-image/edit/remove-background",
-            {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${stabilityKey}`,
-                    Accept: "application/json",
-                },
-                body: bgFormData,
-            }
-        );
-
-        if (!bgResponse.ok) {
-            const errorText = await bgResponse.text();
+        if (pipeline === "inpaint") {
+            const result = await generateInpaintImage({
+                stabilityKey,
+                sceneImage: sceneImage!,
+                maskImage: maskImage!,
+                finalPrompt,
+                negativePrompt,
+            });
 
             return NextResponse.json({
-                overlayUrl: `data:image/png;base64,${generatedData.image}`,
-                warning: `Remove background failed: ${errorText}`,
+                resultSceneUrl: result.resultSceneUrl,
+                compositedUrl: result.resultSceneUrl,
+                finalImageUrl: result.resultSceneUrl,
                 prompt: finalPrompt,
                 negativePrompt,
+                debug: {
+                    pipeline,
+                    productType,
+                    userPrompt,
+                    placementMode,
+                    generateMode,
+                    respectReference,
+                    material,
+                    lighting,
+                    shapeDetail: shapeDetailValue,
+                    dimensions,
+                    placement,
+                    adjustments,
+                    geminiAnalysis,
+                },
             });
         }
 
-        const bgData = await bgResponse.json();
-        const finalImageBase64 = bgData.image || bgData.base64;
-
-        if (!finalImageBase64) {
-            return NextResponse.json({
-                overlayUrl: `data:image/png;base64,${generatedData.image}`,
-                warning:
-                    "Remove background nu a returnat imagine; se folosește imaginea generată inițial.",
-                prompt: finalPrompt,
-                negativePrompt,
-            });
-        }
+        const overlayResult = await generateOverlayImage({
+            stabilityKey,
+            refImage,
+            finalPrompt,
+            negativePrompt,
+            usingRefAsInitImage,
+            respectReference,
+            shapeDetailValue,
+        });
 
         return NextResponse.json({
-            overlayUrl: `data:image/png;base64,${finalImageBase64}`,
+            overlayUrl: overlayResult.overlayUrl,
+            warning: overlayResult.warning,
             prompt: finalPrompt,
             negativePrompt,
             debug: {
+                pipeline,
                 productType,
                 userPrompt,
                 placementMode,
