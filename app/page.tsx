@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type GenerateMode = "rapid" | "replica";
 
@@ -28,6 +28,14 @@ type PlacementMode =
     | "Pe fațadă"
     | "Suspendat"
     | "În interior";
+
+type ImageMetrics = {
+    stageRect: DOMRect;
+    imageLeft: number;
+    imageTop: number;
+    imageWidth: number;
+    imageHeight: number;
+};
 
 const PRODUCT_PRESETS: Record<ApiProductType, string> = {
     Arcadă:
@@ -65,7 +73,8 @@ function normalizeText(value: string) {
         .replace(/ș/g, "s")
         .replace(/ş/g, "s")
         .replace(/ț/g, "t")
-        .replace(/ţ/g, "t");
+        .replace(/ţ/g, "t")
+        .trim();
 }
 
 function containsAny(text: string, terms: string[]) {
@@ -274,7 +283,7 @@ function roundedRectPath(
 
 function getInpaintWorkAreaAspect(productType: ApiProductType, prompt: string, shapeDetail: number) {
     const text = normalizeText(prompt);
-    const detail = clamp(shapeDetail / 100, 0, 1);
+    const detail = clamp(shapeDetail / 100, 0.15, 1);
 
     if (
         productType === "Replică food" ||
@@ -287,29 +296,126 @@ function getInpaintWorkAreaAspect(productType: ApiProductType, prompt: string, s
         text.includes("gogoasa")
     ) {
         return {
-            width: 1.35,
-            height: 0.72 + detail * 0.18,
+            width: 1.18,
+            height: 0.58 + detail * 0.14,
             roundness: 0.34,
         };
     }
 
     if (productType === "Mascotă") {
         return {
-            width: 0.82,
-            height: 1.22,
+            width: 0.74,
+            height: 1.12,
             roundness: 0.28,
         };
     }
 
-    if (productType === "Arcadă") return { width: 1.35, height: 1.08, roundness: 0.16 };
-    if (productType === "Tunel") return { width: 1.28, height: 0.98, roundness: 0.18 };
-    if (productType === "Cort") return { width: 1.32, height: 0.92, roundness: 0.18 };
-    if (productType === "Cupolă") return { width: 1.22, height: 0.82, roundness: 0.36 };
+    if (productType === "Arcadă") return { width: 1.28, height: 1.05, roundness: 0.16 };
+    if (productType === "Tunel") return { width: 1.25, height: 0.92, roundness: 0.18 };
+    if (productType === "Cort") return { width: 1.25, height: 0.88, roundness: 0.18 };
+    if (productType === "Cupolă") return { width: 1.15, height: 0.78, roundness: 0.36 };
     if (productType === "Sticlă" || productType === "Replică produs") {
-        return { width: 0.62, height: 1.35, roundness: 0.2 };
+        return { width: 0.52, height: 1.25, roundness: 0.2 };
     }
 
-    return { width: 0.95, height: 0.95, roundness: 0.28 };
+    return { width: 0.9, height: 0.9, roundness: 0.28 };
+}
+
+function getProductVisualAspect(productType: ApiProductType, prompt: string) {
+    const text = normalizeText(prompt);
+
+    if (
+        productType === "Replică food" ||
+        text.includes("burger") ||
+        text.includes("hamburger") ||
+        text.includes("pizza") ||
+        text.includes("sandwich") ||
+        text.includes("hotdog")
+    ) {
+        return {
+            widthToHeight: 1.85,
+            contactY: 0.78,
+        };
+    }
+
+    if (productType === "Mascotă") {
+        return {
+            widthToHeight: 0.82,
+            contactY: 0.91,
+        };
+    }
+
+    if (productType === "Arcadă") {
+        return {
+            widthToHeight: 1.25,
+            contactY: 0.94,
+        };
+    }
+
+    if (productType === "Tunel") {
+        return {
+            widthToHeight: 1.55,
+            contactY: 0.88,
+        };
+    }
+
+    if (productType === "Cort") {
+        return {
+            widthToHeight: 1.5,
+            contactY: 0.9,
+        };
+    }
+
+    if (productType === "Cupolă") {
+        return {
+            widthToHeight: 1.5,
+            contactY: 0.88,
+        };
+    }
+
+    if (productType === "Sticlă" || productType === "Replică produs") {
+        return {
+            widthToHeight: 0.42,
+            contactY: 0.94,
+        };
+    }
+
+    return {
+        widthToHeight: 1,
+        contactY: 0.9,
+    };
+}
+
+function estimateMetersVisibleInImage(placementMode: PlacementMode) {
+    if (placementMode === "Pe acoperiș") return 18;
+    if (placementMode === "Pe fațadă") return 14;
+    if (placementMode === "Suspendat") return 16;
+    if (placementMode === "În interior") return 6;
+    return 13.5;
+}
+
+function calculateAutoMockupBox(options: {
+    productType: ApiProductType;
+    prompt: string;
+    heightM: number;
+    imageMetrics: ImageMetrics | null;
+    placementMode: PlacementMode;
+    userScalePercent: number;
+}) {
+    const visual = getProductVisualAspect(options.productType, options.prompt);
+    const fallbackImageHeight = 720;
+    const imageHeightPx = options.imageMetrics?.imageHeight || fallbackImageHeight;
+    const imageWidthPx = options.imageMetrics?.imageWidth || 1280;
+    const metersVisible = estimateMetersVisibleInImage(options.placementMode);
+    const targetHeightPx = (options.heightM / metersVisible) * imageHeightPx;
+    const correctedHeightPx = clamp(targetHeightPx * (options.userScalePercent / 100), 26, imageHeightPx * 0.62);
+    const correctedWidthPx = correctedHeightPx * visual.widthToHeight;
+    const widthPercent = clamp((correctedWidthPx / imageWidthPx) * 100, 4, 80);
+
+    return {
+        widthPercent,
+        visualContactY: visual.contactY,
+    };
 }
 
 function makeProceduralInflatableSvgDataUrl(options: {
@@ -326,55 +432,85 @@ function makeProceduralInflatableSvgDataUrl(options: {
         prompt.includes("hamburger");
 
     const isPenguin = prompt.includes("pinguin") || prompt.includes("penguin");
+    const detail = clamp(options.shapeDetail, 15, 100);
+    const detailT = (detail - 15) / 85;
+    const lowDetail = detail <= 25;
+    const mediumDetail = detail <= 55;
 
     const ledGlow = options.material === "LED interior" || options.material === "Alb translucid";
     const night = options.lighting === "Noapte";
     const warm = options.lighting === "Golden hour";
-    const detailT = clamp(options.shapeDetail / 100, 0.15, 1);
 
     const bgGlow = ledGlow
         ? `<ellipse cx="512" cy="418" rx="430" ry="230" fill="rgba(255,215,125,0.22)" filter="url(#blurGlow)" />`
         : "";
 
-    const glossyOpacity = options.material === "PVC mat" ? 0.14 : 0.28;
-    const seamOpacity = options.material === "PVC mat" ? 0.18 : 0.24;
+    const glossyOpacity = options.material === "PVC mat" ? 0.12 : 0.28;
+    const seamOpacity = options.material === "PVC mat" ? 0.14 : 0.22;
     const globalBrightness = night ? 0.78 : warm ? 1.05 : 1;
 
     let body = "";
 
     if (isBurger) {
+        const bunTop = lowDetail
+            ? `<ellipse cx="512" cy="424" rx="345" ry="118" fill="url(#bunTop)" />
+               <rect x="198" y="420" width="628" height="86" rx="43" fill="url(#bunTop)" />`
+            : `<path d="M170 490 C185 330 840 330 855 490 C805 550 225 550 170 490 Z" fill="url(#bunTop)" />`;
+
+        const sesame = mediumDetail
+            ? `<circle cx="392" cy="408" r="7" fill="#fff4d8" opacity="0.62" />
+               <circle cx="470" cy="386" r="6" fill="#fff4d8" opacity="0.62" />
+               <circle cx="548" cy="399" r="7" fill="#fff4d8" opacity="0.62" />
+               <circle cx="620" cy="420" r="5" fill="#fff4d8" opacity="0.62" />`
+            : "";
+
+        const lettuce = lowDetail
+            ? `<rect x="190" y="520" width="644" height="22" rx="11" fill="#76a83b" opacity="0.96" />`
+            : `<path d="M185 520 C225 496 260 545 305 518 C350 490 390 548 440 520 C490 492 535 548 585 520 C635 492 685 548 735 520 C775 498 815 528 842 514 L842 548 L185 548 Z" fill="#6fb33f" />`;
+
+        const cheese = lowDetail
+            ? `<rect x="210" y="550" width="604" height="25" rx="12" fill="#d3a22c" opacity="0.98" />`
+            : `<path d="M210 550 L812 550 L772 606 L700 566 L628 610 L555 566 L485 608 L420 566 L350 607 L210 575 Z" fill="#f3bd32" />`;
+
+        const patty = `<rect x="195" y="580" width="634" height="${lowDetail ? 42 : 58}" rx="${lowDetail ? 21 : 29}" fill="#5f3b25" opacity="0.98" />`;
+
+        const tomato = detail >= 35
+            ? `<rect x="205" y="512" width="614" height="18" rx="9" fill="#c1493d" opacity="0.94" />`
+            : "";
+
         body = `
             <g filter="url(#softShadow)">
-                <ellipse cx="512" cy="545" rx="360" ry="${155 + detailT * 24}" fill="url(#burgerBody)" />
-                <ellipse cx="512" cy="530" rx="350" ry="${145 + detailT * 18}" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
-                <ellipse cx="512" cy="545" rx="360" ry="${155 + detailT * 24}" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
-                <ellipse cx="512" cy="465" rx="300" ry="78" fill="rgba(255,228,166,0.72)" />
-                <rect x="230" y="514" width="564" height="24" rx="12" fill="#c34f42" opacity="0.96" />
-                <rect x="218" y="548" width="588" height="20" rx="10" fill="#79b83b" opacity="0.98" />
-                <rect x="235" y="580" width="554" height="30" rx="15" fill="#654128" opacity="0.98" />
-                <rect x="250" y="622" width="524" height="22" rx="11" fill="#d3a22c" opacity="0.98" />
-                <circle cx="430" cy="438" r="7" fill="#fff4d8" opacity="0.65" />
-                <circle cx="495" cy="424" r="6" fill="#fff4d8" opacity="0.65" />
-                <circle cx="560" cy="435" r="7" fill="#fff4d8" opacity="0.65" />
-                <circle cx="620" cy="452" r="5" fill="#fff4d8" opacity="0.65" />
-                <path d="M250 435 C365 380 660 380 775 435" stroke="rgba(255,255,255,0.28)" stroke-width="18" stroke-linecap="round" fill="none" />
+                ${bunTop}
+                ${sesame}
+                ${tomato}
+                ${lettuce}
+                ${cheese}
+                ${patty}
+                <rect x="205" y="${lowDetail ? 628 : 650}" width="614" height="${lowDetail ? 76 : 92}" rx="${lowDetail ? 38 : 46}" fill="url(#bunBottom)" />
+                <ellipse cx="512" cy="540" rx="350" ry="${160 + detailT * 12}" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
+                <path d="M220 414 C330 355 690 355 804 414" stroke="rgba(255,255,255,0.24)" stroke-width="18" stroke-linecap="round" fill="none" />
+                <path d="M190 495 C235 548 790 548 836 495" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" fill="none" />
             </g>
         `;
     } else if (isPenguin) {
+        const faceDetails = detail >= 25
+            ? `<ellipse cx="455" cy="310" rx="34" ry="38" fill="#ffffff" />
+               <ellipse cx="570" cy="310" rx="34" ry="38" fill="#ffffff" />
+               <circle cx="455" cy="318" r="13" fill="#111827" />
+               <circle cx="570" cy="318" r="13" fill="#111827" />
+               <path d="M500 350 L540 350 L520 386 Z" fill="#f59e0b" />`
+            : `<path d="M498 350 L540 350 L520 380 Z" fill="#f59e0b" />`;
+
         body = `
             <g filter="url(#softShadow)">
-                <ellipse cx="512" cy="555" rx="230" ry="320" fill="#111827" />
-                <ellipse cx="512" cy="595" rx="150" ry="240" fill="#f8fafc" />
-                <ellipse cx="512" cy="320" rx="175" ry="150" fill="#111827" />
-                <ellipse cx="455" cy="310" rx="34" ry="38" fill="#ffffff" />
-                <ellipse cx="570" cy="310" rx="34" ry="38" fill="#ffffff" />
-                <circle cx="455" cy="318" r="13" fill="#111827" />
-                <circle cx="570" cy="318" r="13" fill="#111827" />
-                <path d="M500 350 L540 350 L520 386 Z" fill="#f59e0b" />
-                <ellipse cx="388" cy="820" rx="82" ry="34" fill="#f59e0b" />
-                <ellipse cx="636" cy="820" rx="82" ry="34" fill="#f59e0b" />
-                <ellipse cx="512" cy="555" rx="230" ry="320" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
-                <ellipse cx="512" cy="555" rx="230" ry="320" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
+                <ellipse cx="512" cy="555" rx="220" ry="310" fill="#111827" />
+                <ellipse cx="512" cy="598" rx="140" ry="228" fill="#f8fafc" />
+                <ellipse cx="512" cy="320" rx="168" ry="142" fill="#111827" />
+                ${faceDetails}
+                <ellipse cx="388" cy="820" rx="78" ry="32" fill="#f59e0b" />
+                <ellipse cx="636" cy="820" rx="78" ry="32" fill="#f59e0b" />
+                <ellipse cx="512" cy="555" rx="220" ry="310" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="555" rx="220" ry="310" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
             </g>
         `;
     } else {
@@ -383,7 +519,7 @@ function makeProceduralInflatableSvgDataUrl(options: {
                 <ellipse cx="512" cy="540" rx="330" ry="210" fill="url(#genericBase)" />
                 <ellipse cx="512" cy="536" rx="326" ry="206" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
                 <ellipse cx="512" cy="540" rx="330" ry="210" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
-                <path d="M250 415 C360 365 664 365 774 415" stroke="rgba(255,255,255,0.28)" stroke-width="20" stroke-linecap="round" fill="none" />
+                <path d="M250 415 C360 365 664 365 774 415" stroke="rgba(255,255,255,0.26)" stroke-width="20" stroke-linecap="round" fill="none" />
             </g>
         `;
     }
@@ -405,14 +541,20 @@ function makeProceduralInflatableSvgDataUrl(options: {
             <stop offset="100%" stop-color="${ledGlow ? "#c98518" : "#b84300"}" />
         </radialGradient>
 
-        <radialGradient id="burgerBody" cx="38%" cy="26%" r="78%">
-            <stop offset="0%" stop-color="#f5dcb5" />
-            <stop offset="36%" stop-color="#e4b165" />
-            <stop offset="100%" stop-color="#b86a28" />
+        <radialGradient id="bunTop" cx="38%" cy="18%" r="78%">
+            <stop offset="0%" stop-color="#ffe1a8" />
+            <stop offset="44%" stop-color="#d9953b" />
+            <stop offset="100%" stop-color="#a85e1d" />
+        </radialGradient>
+
+        <radialGradient id="bunBottom" cx="38%" cy="20%" r="78%">
+            <stop offset="0%" stop-color="#f7d18f" />
+            <stop offset="48%" stop-color="#ce8735" />
+            <stop offset="100%" stop-color="#9a551a" />
         </radialGradient>
 
         <radialGradient id="surfaceGloss" cx="34%" cy="18%" r="68%">
-            <stop offset="0%" stop-color="rgba(255,255,255,0.80)" />
+            <stop offset="0%" stop-color="rgba(255,255,255,0.82)" />
             <stop offset="28%" stop-color="rgba(255,255,255,0.22)" />
             <stop offset="72%" stop-color="rgba(255,255,255,0.04)" />
             <stop offset="100%" stop-color="rgba(255,255,255,0)" />
@@ -468,7 +610,7 @@ export default function Page() {
 
     const [posX, setPosX] = useState(58);
     const [posY, setPosY] = useState(92);
-    const [overlayScale, setOverlayScale] = useState(32);
+    const [overlayScale, setOverlayScale] = useState(100);
     const [inpaintAreaScale, setInpaintAreaScale] = useState(118);
     const [rotation, setRotation] = useState(0);
 
@@ -567,7 +709,7 @@ export default function Page() {
         resetGeneratedResult();
     };
 
-    const getContainedImageRect = () => {
+    const getContainedImageRect = (): ImageMetrics | null => {
         const stage = previewRef.current;
         if (!stage) return null;
 
@@ -599,6 +741,29 @@ export default function Page() {
         };
     };
 
+    const currentMetrics = useMemo(() => {
+        return null;
+    }, []);
+
+    const getMarkerPositionInsideStage = () => {
+        const metrics = getContainedImageRect();
+
+        if (!metrics) {
+            return {
+                left: `${posX}%`,
+                top: `${posY}%`,
+            };
+        }
+
+        const imageX = metrics.imageLeft + (posX / 100) * metrics.imageWidth;
+        const imageY = metrics.imageTop + (posY / 100) * metrics.imageHeight;
+
+        return {
+            left: `${imageX}px`,
+            top: `${imageY}px`,
+        };
+    };
+
     const buildMaskBase64 = () => {
         const metrics = getContainedImageRect();
         if (!metrics || !sceneNatural.width || !sceneNatural.height) return null;
@@ -613,49 +778,27 @@ export default function Page() {
         ctx.fillStyle = "black";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const anchorStageX = (posX / 100) * metrics.stageRect.width;
-        const anchorStageY = (posY / 100) * metrics.stageRect.height;
+        const imageX = (posX / 100) * canvas.width;
+        const imageY = (posY / 100) * canvas.height;
 
-        const imageX = ((anchorStageX - metrics.imageLeft) / metrics.imageWidth) * canvas.width;
-        const imageY = ((anchorStageY - metrics.imageTop) / metrics.imageHeight) * canvas.height;
+        const visual = getProductVisualAspect(effectiveProductType, subjectPrompt);
+        const metersVisible = estimateMetersVisibleInImage(placementMode);
+        const targetHeightPx = (heightM / metersVisible) * canvas.height;
+        const correctedHeightPx = clamp(
+            targetHeightPx * (inpaintAreaScale / 100),
+            canvas.height * 0.045,
+            canvas.height * 0.48
+        );
+        const correctedWidthPx = correctedHeightPx * visual.widthToHeight;
 
-        const displayedObjectWidthPx = (overlayScale / 100) * metrics.imageWidth;
-        const objectWidthInImagePx = (displayedObjectWidthPx / metrics.imageWidth) * canvas.width;
-
-        const areaMultiplier = inpaintAreaScale / 100;
         const aspect = getInpaintWorkAreaAspect(effectiveProductType, subjectPrompt, shapeDetail);
-
-        const minMaskWidth = canvas.width * 0.045;
-        const maxMaskWidth = canvas.width * 0.45;
-        const minMaskHeight = canvas.height * 0.045;
-        const maxMaskHeight = canvas.height * 0.45;
-
-        const workWidth = clamp(
-            objectWidthInImagePx * aspect.width * areaMultiplier,
-            minMaskWidth,
-            maxMaskWidth
-        );
-
-        const workHeight = clamp(
-            objectWidthInImagePx * aspect.height * areaMultiplier,
-            minMaskHeight,
-            maxMaskHeight
-        );
-
-        const contactSpace = clamp(workHeight * 0.16, 12, canvas.height * 0.045);
-        const sideSpace = clamp(workWidth * 0.045, 6, canvas.width * 0.025);
-
-        const finalW = clamp(workWidth + sideSpace * 2, minMaskWidth, maxMaskWidth);
-        const finalH = clamp(workHeight + contactSpace, minMaskHeight, maxMaskHeight);
+        const finalW = clamp(correctedWidthPx * aspect.width, canvas.width * 0.045, canvas.width * 0.52);
+        const finalH = clamp(correctedHeightPx * aspect.height, canvas.height * 0.045, canvas.height * 0.52);
 
         let x = imageX - finalW / 2;
-        let y = imageY - finalH + contactSpace * 0.62;
+        let y = imageY - finalH * visual.contactY;
 
-        if (placementMode === "Suspendat") {
-            y = imageY - finalH / 2;
-        }
-
-        if (placementMode === "Pe fațadă") {
+        if (placementMode === "Suspendat" || placementMode === "Pe fațadă") {
             y = imageY - finalH / 2;
         }
 
@@ -691,9 +834,9 @@ export default function Page() {
             ctx.beginPath();
             ctx.ellipse(
                 imageX,
-                clamp(imageY + contactSpace * 0.14, 0, canvas.height),
-                finalW * 0.38,
-                contactSpace * 0.46,
+                imageY + finalH * 0.04,
+                finalW * 0.42,
+                finalH * 0.07,
                 0,
                 0,
                 Math.PI * 2
@@ -729,11 +872,11 @@ export default function Page() {
             Math.min(imageRect.imageTop + imageRect.imageHeight, clickY)
         );
 
-        const x = (clampedX / stageRect.width) * 100;
-        const y = (clampedY / stageRect.height) * 100;
+        const x = ((clampedX - imageRect.imageLeft) / imageRect.imageWidth) * 100;
+        const y = ((clampedY - imageRect.imageTop) / imageRect.imageHeight) * 100;
 
         setPosX(clamp(x, 0, 100));
-        setPosY(clamp(y, 0, 180));
+        setPosY(clamp(y, 0, 100));
     };
 
     const handleGenerate = async () => {
@@ -850,6 +993,18 @@ export default function Page() {
 
         setLoading(false);
     };
+
+    const metrics = getContainedImageRect();
+    const mockupBox = calculateAutoMockupBox({
+        productType: effectiveProductType,
+        prompt: subjectPrompt,
+        heightM,
+        imageMetrics: metrics,
+        placementMode,
+        userScalePercent: overlayScale,
+    });
+
+    const markerPosition = getMarkerPositionInsideStage();
 
     return (
         <div className="aztec-grid">
@@ -1290,7 +1445,7 @@ export default function Page() {
                                 className="aztec-slider"
                                 type="range"
                                 min={0}
-                                max={180}
+                                max={100}
                                 step={0.1}
                                 value={posY}
                                 onChange={(e) => {
@@ -1322,22 +1477,22 @@ export default function Page() {
                             {!hasGeneratedVisual && (
                                 <div className="aztec-info-box" style={{ marginTop: 12 }}>
                                     Click pe imagine sau folosește X/Y pentru punctul de sprijin.
-                                    Scală, rotație, umbră și integrare apar după generare.
+                                    Scala default este 100% și se raportează la înălțimea țintă.
                                 </div>
                             )}
 
                             {hasGeneratedVisual && generateMode === "rapid" && (
                                 <>
                                     <div className="aztec-slider-header" style={{ marginTop: 12 }}>
-                                        <div className="aztec-label">Scală pe imagine</div>
+                                        <div className="aztec-label">Scală reală pe imagine</div>
                                         <div className="aztec-slider-value">{overlayScale}%</div>
                                     </div>
 
                                     <input
                                         className="aztec-slider"
                                         type="range"
-                                        min={5}
-                                        max={120}
+                                        min={30}
+                                        max={220}
                                         value={overlayScale}
                                         onChange={(e) => {
                                             setOverlayScale(Number(e.target.value));
@@ -1482,8 +1637,7 @@ export default function Page() {
                             <div
                                 style={{
                                     position: "absolute",
-                                    left: `${posX}%`,
-                                    top: `${posY}%`,
+                                    ...markerPosition,
                                     width: 18,
                                     height: 18,
                                     borderRadius: "50%",
@@ -1498,8 +1652,7 @@ export default function Page() {
                             <div
                                 style={{
                                     position: "absolute",
-                                    left: `${posX}%`,
-                                    top: `${posY}%`,
+                                    ...markerPosition,
                                     width: 54,
                                     height: 54,
                                     borderRadius: "50%",
@@ -1508,42 +1661,6 @@ export default function Page() {
                                     animation: "markerRing 0.9s ease-out infinite",
                                 }}
                             />
-
-                            <div
-                                style={{
-                                    position: "absolute",
-                                    left: `${posX}%`,
-                                    top: `calc(${posY}% - 54px)`,
-                                    transform: "translate(-50%, -100%)",
-                                    background: "rgba(13,16,22,0.94)",
-                                    border: "1px solid rgba(255,255,255,0.14)",
-                                    borderRadius: 14,
-                                    padding: "10px 14px",
-                                    boxShadow: "0 12px 34px rgba(0,0,0,0.38)",
-                                    textAlign: "center",
-                                    minWidth: 210,
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontSize: 13,
-                                        fontWeight: 900,
-                                        color: "#FFFFFF",
-                                        marginBottom: 4,
-                                    }}
-                                >
-                                    Se generează aici
-                                </div>
-                                <div
-                                    style={{
-                                        fontSize: 11,
-                                        color: "rgba(255,255,255,0.62)",
-                                        lineHeight: 1.35,
-                                    }}
-                                >
-                                    X {posX.toFixed(1)}% / Y {posY.toFixed(1)}%
-                                </div>
-                            </div>
                         </div>
                     )}
 
@@ -1552,11 +1669,10 @@ export default function Page() {
                             <div
                                 style={{
                                     position: "absolute",
-                                    left: `calc(${posX}% + ${shadowX}px)`,
-                                    top: `calc(${posY}% + ${shadowY}px)`,
-                                    width: `${overlayScale * (shadowScaleX / 100)}%`,
-                                    height: `${overlayScale * (shadowScaleY / 100)}%`,
-                                    transform: `translate(-50%, -50%) skewX(${shadowSkew}deg)`,
+                                    ...markerPosition,
+                                    width: `${mockupBox.widthPercent * (shadowScaleX / 100)}%`,
+                                    height: `${mockupBox.widthPercent * (shadowScaleY / 100)}%`,
+                                    transform: `translate(calc(-50% + ${shadowX}px), calc(-50% + ${shadowY}px)) skewX(${shadowSkew}deg)`,
                                     transformOrigin: "50% 50%",
                                     background:
                                         "radial-gradient(ellipse at center, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.42) 34%, rgba(0,0,0,0.16) 58%, rgba(0,0,0,0.04) 76%, rgba(0,0,0,0) 88%)",
@@ -1574,11 +1690,10 @@ export default function Page() {
                                 alt="Gonflabil generat"
                                 style={{
                                     position: "absolute",
-                                    left: `${posX}%`,
-                                    top: `${posY}%`,
-                                    width: `${overlayScale}%`,
-                                    transform: `translate(-50%, -100%) rotate(${rotation}deg)`,
-                                    transformOrigin: "50% 100%",
+                                    ...markerPosition,
+                                    width: `${mockupBox.widthPercent}%`,
+                                    transform: `translate(-50%, -${mockupBox.visualContactY * 100}%) rotate(${rotation}deg)`,
+                                    transformOrigin: `50% ${mockupBox.visualContactY * 100}%`,
                                     zIndex: 3,
                                     pointerEvents: "none",
                                     userSelect: "none",
@@ -1593,8 +1708,9 @@ export default function Page() {
                         <div
                             className="aztec-position-dot"
                             style={{
-                                left: `${posX}%`,
-                                top: `${posY}%`,
+                                position: "absolute",
+                                ...markerPosition,
+                                transform: "translate(-50%, -50%)",
                             }}
                         />
                     )}
