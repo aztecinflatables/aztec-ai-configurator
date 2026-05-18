@@ -1466,10 +1466,7 @@ export default function Page() {
                                 position: "absolute",
                                 inset: 0,
                                 zIndex: 20,
-                                background: "rgba(0,0,0,0.38)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
+                                background: "rgba(0,0,0,0.22)",
                                 pointerEvents: "none",
                             }}
                         >
@@ -1478,46 +1475,64 @@ export default function Page() {
                                     position: "absolute",
                                     left: `${posX}%`,
                                     top: `${posY}%`,
-                                    width: 34,
-                                    height: 34,
+                                    width: 18,
+                                    height: 18,
                                     borderRadius: "50%",
-                                    border: "3px solid rgba(255,255,255,0.85)",
-                                    borderTopColor: "#FF6A00",
+                                    background: "#FF6A00",
+                                    border: "2px solid rgba(255,255,255,0.95)",
                                     transform: "translate(-50%, -50%)",
-                                    animation: "spin 0.8s linear infinite",
-                                    boxShadow: "0 0 28px rgba(255,106,0,0.55)",
+                                    boxShadow: "0 0 0 0 rgba(255,106,0,0.75)",
+                                    animation: "markerPulse 0.9s ease-out infinite",
                                 }}
                             />
 
                             <div
                                 style={{
-                                    background: "rgba(13,16,22,0.92)",
+                                    position: "absolute",
+                                    left: `${posX}%`,
+                                    top: `${posY}%`,
+                                    width: 54,
+                                    height: 54,
+                                    borderRadius: "50%",
+                                    border: "2px solid rgba(255,106,0,0.85)",
+                                    transform: "translate(-50%, -50%)",
+                                    animation: "markerRing 0.9s ease-out infinite",
+                                }}
+                            />
+
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    left: `${posX}%`,
+                                    top: `calc(${posY}% - 54px)`,
+                                    transform: "translate(-50%, -100%)",
+                                    background: "rgba(13,16,22,0.94)",
                                     border: "1px solid rgba(255,255,255,0.14)",
-                                    borderRadius: 18,
-                                    padding: "18px 22px",
-                                    boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
+                                    borderRadius: 14,
+                                    padding: "10px 14px",
+                                    boxShadow: "0 12px 34px rgba(0,0,0,0.38)",
                                     textAlign: "center",
-                                    maxWidth: 320,
+                                    minWidth: 210,
                                 }}
                             >
                                 <div
                                     style={{
-                                        fontSize: 15,
+                                        fontSize: 13,
                                         fontWeight: 900,
                                         color: "#FFFFFF",
-                                        marginBottom: 6,
+                                        marginBottom: 4,
                                     }}
                                 >
-                                    Se generează simularea...
+                                    Se generează aici
                                 </div>
                                 <div
                                     style={{
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         color: "rgba(255,255,255,0.62)",
-                                        lineHeight: 1.4,
+                                        lineHeight: 1.35,
                                     }}
                                 >
-                                    Tip detectat: {effectiveProductType}
+                                    X {posX.toFixed(1)}% / Y {posY.toFixed(1)}%
                                 </div>
                             </div>
                         </div>
@@ -1602,12 +1617,32 @@ export default function Page() {
             </section>
 
             <style jsx global>{`
-                @keyframes spin {
-                    from {
-                        rotate: 0deg;
+                @keyframes markerPulse {
+                    0% {
+                        box-shadow: 0 0 0 0 rgba(255, 106, 0, 0.75);
+                        opacity: 1;
                     }
-                    to {
-                        rotate: 360deg;
+
+                    70% {
+                        box-shadow: 0 0 0 18px rgba(255, 106, 0, 0);
+                        opacity: 1;
+                    }
+
+                    100% {
+                        box-shadow: 0 0 0 0 rgba(255, 106, 0, 0);
+                        opacity: 1;
+                    }
+                }
+
+                @keyframes markerRing {
+                    0% {
+                        opacity: 0.9;
+                        transform: translate(-50%, -50%) scale(0.45);
+                    }
+
+                    100% {
+                        opacity: 0;
+                        transform: translate(-50%, -50%) scale(1.2);
                     }
                 }
             `}</style>
