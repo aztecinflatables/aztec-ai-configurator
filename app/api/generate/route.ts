@@ -220,7 +220,10 @@ function resolveInflatableIntent(options: {
         };
     }
 
-    if (containsAny(rawSubject, ["arcada", "arch", "poarta", "portal", "intrare"]) || selectedType === "Arcadă") {
+    if (
+        containsAny(rawSubject, ["arcada", "arch", "poarta", "portal", "intrare"]) ||
+        selectedType === "Arcadă"
+    ) {
         return {
             subject: rawSubject || "arcadă gonflabilă",
             productType: "Arcadă",
@@ -415,10 +418,21 @@ STRICT SUBJECT RULE:
 ${intent.subjectLock}
 
 Mandatory result:
+- generate exactly ONE single inflatable object, centered, isolated;
+- never generate multiple copies;
+- never generate repeated objects;
+- never generate a repeated pattern;
+- never generate a collage;
+- never generate a tiled image;
+- never generate a rectangular image patch;
+- never generate a poster, flat print or product sheet;
+- the output must be one standalone transparent PNG object suitable for compositing;
 - generate one clean transparent PNG overlay of the inflatable object;
 - no background;
 - no scene;
+- no ground;
 - no people;
+- no props;
 - PVC inflatable construction;
 - rounded air-filled volumes;
 - fabricable commercial inflatable form;
@@ -464,39 +478,67 @@ Rules:
 
     if (mode === "replica" || respectReference >= 86) {
         return `
-GENERATION MODE: CONTROLLED INFLATABLE REPLICA.
+GENERATION MODE: CONTROLLED INFLATABLE REPLICA OVERLAY.
 
 Rules:
 - preserve the requested subject;
 - convert the result into a real commercial inflatable object;
+- output exactly ONE object only;
+- the object must be centered and isolated;
+- transparent background only;
+- no repeated objects;
+- no product pattern;
+- no tiled image;
+- no collage;
+- no background rectangle;
+- no poster;
+- no flat print sheet;
+- no scenery;
 - do not generate ordinary real objects;
-- do not generate scenery;
-- do not modify or include the uploaded background photo.
+- do not use or modify the uploaded background photo.
 `.trim();
     }
 
     if (mode === "photo") {
         return `
-GENERATION MODE: PHOTOREALISTIC INFLATABLE PRODUCT.
+GENERATION MODE: PHOTOREALISTIC SINGLE INFLATABLE PRODUCT OVERLAY.
 
 Rules:
-- clean commercial visualization;
+- output must contain exactly ONE object only;
+- one standalone object, centered, isolated;
+- no repeated elements;
+- no product pattern;
+- no tiled image;
+- no collage;
+- no pile of objects;
+- no many copies;
+- no background rectangle;
+- no poster;
+- no scene;
+- no ground;
+- no people;
+- no shadows baked into a rectangular background;
+- transparent background only;
 - realistic PVC material;
 - manufacturable shape;
-- controlled level of form detail;
-- no scenery or background.
+- controlled level of form detail.
 `.trim();
     }
 
     return `
-GENERATION MODE: CLEAN MOCKUP.
+GENERATION MODE: CLEAN MOCKUP OVERLAY.
 
 Rules:
+- output exactly ONE object only;
 - simple geometry;
 - readable silhouette;
 - minimal surface detail;
 - commercial mockup style;
-- no scenery or background.
+- transparent background only;
+- no scenery or background;
+- no repeated objects;
+- no collage;
+- no pattern.
 `.trim();
 }
 
@@ -551,7 +593,7 @@ Use it as product design reference only.`;
 
         if (respectTexture) {
             prompt += `
-- preserve useful color / texture / pattern logic as printable PVC graphics;`;
+- preserve useful color / texture / pattern logic as printable PVC graphics on the single object only;`;
         }
 
         if (respectBranding) {
@@ -582,14 +624,16 @@ Use it as product design reference only.`;
         prompt += `
 
 No product reference image was uploaded.
-Generate from the written request and resolved product intent.`;
+Generate from the written request and resolved product intent.
+Do not create a repeated product pattern or multiple product copies.`;
     }
 
     if (hasTextureImage) {
         prompt += `
 
 A separate texture/branding image was uploaded.
-Use it as surface print inspiration only.
+Use it as surface print inspiration only on the single generated object.
+Do not turn it into a tiled image, poster, flat graphic, collage or background patch.
 Do not let the texture destroy the inflatable shape.`;
     }
 
@@ -687,32 +731,36 @@ Preserve the original photo outside the mask.
     if (lighting === "Noapte") {
         return `
 LIGHTING:
-Render the object for night compositing.
+Render the single object for night compositing.
 Use darker ambient exposure, rim highlights and controlled reflections.
 If material is LED interior or translucent, make it softly illuminated from inside.
+Transparent background only.
 `.trim();
     }
 
     if (lighting === "Golden hour") {
         return `
 LIGHTING:
-Render the object for golden-hour compositing.
+Render the single object for golden-hour compositing.
 Use warm amber highlights and low sun direction.
+Transparent background only.
 `.trim();
     }
 
     if (lighting === "Interior") {
         return `
 LIGHTING:
-Render the object for interior compositing.
+Render the single object for interior compositing.
 Soft indoor reflections, controlled ambient lighting.
+Transparent background only.
 `.trim();
     }
 
     return `
 LIGHTING:
-Render the object for daylight compositing.
+Render the single object for daylight compositing.
 Use natural outdoor daylight and clean neutral exposure.
+Transparent background only.
 `.trim();
 }
 
@@ -788,12 +836,16 @@ For subject "${subject}":
     if (shapeDetail <= 10) {
         return `
 FORM COMPLEXITY:
-LOW DETAIL OVERLAY.
+LOW DETAIL SINGLE OVERLAY.
 
 For subject "${subject}":
+- exactly one object only;
 - simplified but recognizable;
 - one to three large rounded inflatable volumes;
 - no tiny details;
+- no repeated copies;
+- no pattern;
+- no collage;
 - no wrong object substitution.
 `.trim();
     }
@@ -801,35 +853,42 @@ For subject "${subject}":
     if (shapeDetail <= 30) {
         return `
 FORM COMPLEXITY:
-SIMPLE INFLATABLE OVERLAY.
+SIMPLE SINGLE INFLATABLE OVERLAY.
 
 For subject "${subject}":
+- exactly one object only;
 - large primitive inflated shapes;
 - clear readable silhouette;
-- secondary details should be printed, not modeled.
+- secondary details should be printed on the object, not repeated around it;
+- no tiled pattern;
+- no collage.
 `.trim();
     }
 
     if (shapeDetail <= 60) {
         return `
 FORM COMPLEXITY:
-BALANCED INFLATABLE OVERLAY.
+BALANCED SINGLE INFLATABLE OVERLAY.
 
 For subject "${subject}":
+- exactly one object only;
 - recognizable subject proportions;
 - clean inflatable construction;
-- fabricable PVC panel logic.
+- fabricable PVC panel logic;
+- no repeated objects.
 `.trim();
     }
 
     return `
 FORM COMPLEXITY:
-DETAILED INFLATABLE OVERLAY.
+DETAILED SINGLE INFLATABLE OVERLAY.
 
 For subject "${subject}":
+- exactly one object only;
 - preserve important silhouette details;
 - use welded PVC panel logic;
-- keep it manufacturable.
+- keep it manufacturable;
+- no pattern, no collage, no multiple copies.
 `.trim();
 }
 
@@ -847,6 +906,7 @@ Length / depth: ${depthM.toFixed(1)} meters.
 Rules:
 - Respect approximate height / width / length ratio.
 - These are product dimensions, not background dimensions.
+- For overlay, generate one object with these proportions, not a product pattern.
 `.trim();
 }
 
@@ -903,7 +963,9 @@ Use indoor-style contact shadow and ambient lighting.
     return `
 PLACEMENT INTENT:
 ${placementMode || "Custom"}.
-Generate clean object only for compositing.
+Generate clean single object only for compositing.
+Transparent background only.
+No scene, no floor, no building, no background patch.
 `.trim();
 }
 
@@ -920,6 +982,37 @@ function getNegativePrompt(options: {
 
     let negative = `
 ${intent.negativeLock},
+multiple objects,
+multiple copies,
+repeated object,
+repeated objects,
+repeated burgers,
+many burgers,
+many objects,
+food pile,
+object pile,
+scattered objects,
+pattern,
+tile pattern,
+tiled image,
+repeating pattern,
+seamless pattern,
+collage,
+grid,
+sprite sheet,
+contact sheet,
+product sheet,
+poster,
+flat print,
+2d pattern,
+background rectangle,
+white rectangle,
+image patch,
+rectangular patch,
+square patch,
+printed poster,
+sticker sheet,
+random product icons,
 person,
 human,
 man,
@@ -977,6 +1070,8 @@ building,
 street,
 sky,
 ground,
+floor,
+grass,
 trees,
 environment,
 photo background,
@@ -984,7 +1079,15 @@ changed background,
 modified background photo,
 cropped object,
 cut off object,
-bad transparent edges`;
+bad transparent edges,
+opaque background,
+non-transparent background,
+shadow on white background,
+object inside rectangle,
+food photography scene,
+table,
+plate,
+tray`;
     } else {
         negative += `,
 changing unmasked background,
@@ -1334,6 +1437,10 @@ Shape: ${geminiAnalysis.shape_description}
 Texture: ${geminiAnalysis.texture_description}
 Proportions: ${geminiAnalysis.proportions}
 Inflatable conversion: ${geminiAnalysis.inflatable_conversion}
+
+Important:
+Use this analysis only to build ONE standalone inflatable object.
+Do not create a collage, product pattern, tiled image or multiple versions.
 `
             : "";
 
@@ -1350,8 +1457,10 @@ Respect the base-center placement implied by the mask.
 `
                 : `
 TASK:
-Generate ONLY a transparent PNG overlay of a commercial inflatable object.
+Generate ONLY a transparent PNG overlay of ONE commercial inflatable object.
 DO NOT generate any background.
+DO NOT generate a rectangle, poster, flat product sheet, collage, pattern or tiled image.
+DO NOT generate multiple copies.
 DO NOT use or modify the uploaded scene photo.
 The background photo is handled only by the frontend and must remain unchanged.
 `;
@@ -1380,6 +1489,7 @@ RULE:
 The written user request and AUTO RESOLVED PRODUCT TYPE are the primary source of truth.
 The original selected UI type is secondary and must not override a clear subject in the text.
 For food/product/architecture objects, never generate a human, person, costume, wearable mascot or mannequin.
+For overlay generation, always generate exactly ONE single isolated object only.
 
 ${getProductTypePrompt(intent, shapeDetailValue, pipeline)}
 
@@ -1442,18 +1552,34 @@ ${
 - do not change the requested subject.
 `
         : `
-- one single inflatable object;
+- output exactly ONE single inflatable object only;
+- one single standalone object, centered, isolated;
 - transparent background;
+- no background rectangle;
+- no poster;
+- no product sheet;
+- no flat print sheet;
+- no collage;
+- no grid;
+- no tiled image;
+- no repeated copies;
+- no multiple objects;
+- no many burgers;
+- no food pile;
 - complete object, not cropped;
 - PVC air-filled appearance;
 - soft rounded inflated edges;
 - simple clean outer silhouette when detail slider is low;
 - texture may be photorealistic, but geometry must follow the selected detail level;
+- surface details must be printed on the one object, not repeated around it;
 - subtle PVC tension only;
 - no scene;
 - no building;
 - no street;
 - no sky;
+- no ground;
+- no floor;
+- no trees;
 - no people;
 - no human;
 - no person;
