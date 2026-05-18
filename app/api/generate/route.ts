@@ -1,826 +1,348 @@
 import { NextResponse } from "next/server";
+import sharp from "sharp";
 
-export const maxDuration = 60;
+export const runtime = "nodejs";
 
-type GenerateMode = "rapid" | "photo" | "replica";
-type RenderPipeline = "overlay" | "inpaint";
+type RenderStyle = "mockup" | "photorealism";
+type Placement = "ground" | "roof" | "wall";
+type Lighting = "day" | "night";
 
-type RequestBody = {
-    sceneImage?: string;
-    maskImage?: string | null;
-    refImage?: string | null;
-    textureImage?: string | null;
-    prompt?: string;
-    userPrompt?: string;
-    productPreset?: string;
-    productType?: string;
-    selectedUiProductType?: string;
-    placementMode?: string;
-    renderPipeline?: RenderPipeline;
-    generateMode?: GenerateMode;
-    referenceControl?: {
-        respectReference?: number;
-        respectShape?: boolean;
-        respectTexture?: boolean;
-        respectProportions?: boolean;
-        respectBranding?: boolean;
-    };
-    dimensions?: {
-        widthM?: number;
-        heightM?: number;
-        depthM?: number;
-        autoScale?: boolean;
-    };
-    material?: string;
-    lighting?: string;
-    realism?: number;
-    shapeDetail?: number;
-    placement?: {
-        x?: number;
-        y?: number;
-        anchor?: string;
-    };
-    adjustments?: {
-        scalePercent?: number;
-        inpaintAreaScale?: number;
-        rotationDeg?: number;
-        shadowX?: number;
-        shadowY?: number;
-        shadowScaleX?: number;
-        shadowScaleY?: number;
-        shadowBlur?: number;
-        shadowOpacity?: number;
-        shadowSkew?: number;
-        objectBrightness?: number;
-        objectContrast?: number;
-        objectWarmth?: number;
-        objectOpacity?: number;
-    };
+type GenerateRequest = {
+  sceneImage: string;
+  referenceImage?: string | null;
+  logoImage?: string | null;
+  maskImage: string;
+  prompt: string;
+  category: string;
+  detectedType: string;
+  placement: Placement;
+  renderStyle: RenderStyle;
+  targetHeightM: number;
+  detailPercent: number;
+  respectPercent: number;
+  respectShape: boolean;
+  respectTexture: boolean;
+  respectProportions: boolean;
+  respectBranding: boolean;
+  material: string;
+  lighting: Lighting;
+  positionX: number;
+  positionY: number;
+  scalePercent: number;
+  rotationDeg: number;
 };
 
-type ResolvedIntent = {
-    subject: string;
-    type: string;
-    overlayPrompt: string;
-    inpaintPrompt: string;
-    negative: string;
-};
-
-function base64ToBlob(base64: string, type = "image/jpeg") {
-    const clean = base64.includes(",") ? base64.split(",")[1] : base64;
-    const binary = atob(clean);
-    const bytes = new Uint8Array(binary.length);
-
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-    }
-
-    return new Blob([bytes], { type });
+function dataUrlToParts(dataUrl: string) {
+  const match = dataUrl.match(/^data:(.+?);base64,(.+)$/);
+  if (!match) {
+    throw new Error("Invalid data URL");
+  }
+  return {
+    mime: match[1],
+    base64: match[2],
+  };
 }
 
-function clamp(value: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, value));
+function dataUrlToBuffer(dataUrl: string): Buffer {
+  const { base64 } = dataUrlToParts(dataUrl);
+  return Buffer.from(base64, "base64");
 }
 
-function normalizeText(value?: string) {
-    return String(value || "")
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/ă/g, "a")
-        .replace(/â/g, "a")
-        .replace(/î/g, "i")
-        .replace(/ș/g, "s")
-        .replace(/ş/g, "s")
-        .replace(/ț/g, "t")
-        .replace(/ţ/g, "t")
-        .trim();
+function bufferToDataUrl(buffer: Buffer, mime = "image/png") {
+  return `data:${mime};base64,${buffer.toString("base64")}`;
 }
 
-function cleanSubject(value?: string) {
-    return String(value || "")
-        .replace(/\s+/g, " ")
-        .replace(/\s+,/g, ",")
-        .replace(/,+/g, ",")
-        .trim();
+function pickFilename(mime: string, base: string) {
+  if (mime.includes("png")) return `${base}.png`;
+  if (mime.includes("webp")) return `${base}.webp`;
+  return `${base}.jpg`;
 }
 
-function hasAny(text: string, terms: string[]) {
-    const t = normalizeText(text);
-    return terms.some((term) => t.includes(normalizeText(term)));
+function dataUrlToBlob(dataUrl: string, baseName: string) {
+  const { mime } = dataUrlToParts(dataUrl);
+  const buffer = dataUrlToBuffer(dataUrl);
+  return {
+    blob: new Blob([buffer], { type: mime }),
+    filename: pickFilename(mime, baseName),
+  };
 }
 
-function getMaterialText(material?: string) {
-    if (material === "PVC mat") {
-        return "matte inflatable PVC, soft commercial inflatable fabric, clean welded seams";
-    }
-
-    if (material === "Alb translucid") {
-        return "white translucent inflatable PVC, soft milky material, subtle internal light scattering";
-    }
-
-    if (material === "LED interior") {
-        return "translucent inflatable PVC with soft internal LED glow, illuminated from inside";
-    }
-
-    if (material === "Outdoor heavy-duty") {
-        return "heavy duty outdoor inflatable PVC, durable commercial event material, subtle welded seams";
-    }
-
-    return "glossy inflatable PVC, smooth shiny air-filled surface, commercial advertising inflatable material";
+function normalizePromptText(text: string) {
+  return (text || "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function getLightingText(lighting?: string) {
-    if (lighting === "Noapte") {
-        return "night-style object lighting, darker ambient exposure, controlled highlights, optional soft glow if material allows it";
-    }
+function resolveSubjectLabel(prompt: string, detectedType: string, category: string) {
+  const text = `${prompt} ${detectedType} ${category}`.toLowerCase();
 
-    if (lighting === "Golden hour") {
-        return "warm golden hour lighting, amber highlights, soft contrast";
-    }
+  if (text.includes("burger") || text.includes("hamburger")) return "hamburger inflatable";
+  if (text.includes("penguin") || text.includes("pinguin")) return "penguin inflatable mascot";
+  if (text.includes("dog") || text.includes("catel") || text.includes("câine")) return "dog inflatable mascot";
+  if (text.includes("arch") || text.includes("arcad")) return "inflatable arch";
+  if (text.includes("tunnel") || text.includes("tunel")) return "inflatable tunnel";
+  if (text.includes("dome") || text.includes("cupol")) return "inflatable dome";
+  if (text.includes("tent") || text.includes("cort")) return "inflatable tent";
+  if (text.includes("glass") || text.includes("sticl")) return "transparent inflatable structure";
+  if (text.includes("mask")) return "inflatable mask";
+  if (text.includes("food") || detectedType.toLowerCase().includes("food")) return "inflatable food replica";
+  if (detectedType.toLowerCase().includes("mascot")) return "inflatable mascot";
+  if (category.toLowerCase().includes("arc")) return "inflatable arch";
 
-    if (lighting === "Interior") {
-        return "soft indoor lighting, controlled reflections";
-    }
-
-    return "neutral daylight lighting, clean reflections";
+  return "inflatable object";
 }
 
-function getDetailText(shapeDetail: number) {
-    if (shapeDetail <= 15) {
-        return "simplified but still instantly recognizable silhouette, large rounded inflated volumes only, minimal details printed on the surface";
-    }
+function buildDetailInstruction(subjectLabel: string, detailPercent: number, renderStyle: RenderStyle) {
+  if (detailPercent <= 20) {
+    return [
+      `Keep the form simplified but still immediately recognizable as a ${subjectLabel}.`,
+      `Use large rounded volumes, minimal segmentation, minimal external complexity, and very subtle inflatable creases.`,
+      `Do NOT reduce it to a flat front icon or a weird abstract blob.`,
+      renderStyle === "mockup"
+        ? `Preserve a readable 3D perspective with clean inflated shape.`
+        : `Preserve a realistic 3D inflated shape with simplified outer form.`,
+    ].join(" ");
+  }
 
-    if (shapeDetail <= 25) {
-        return "simple recognizable inflatable form, broad rounded shapes, few large printed details, no tiny parts";
-    }
+  if (detailPercent <= 50) {
+    return [
+      `Use a medium level of form detail.`,
+      `Keep the shape recognizable and inflated, with moderate simplification of smaller features.`,
+      `Creases and seams should stay subtle.`,
+    ].join(" ");
+  }
 
-    if (shapeDetail <= 55) {
-        return "balanced recognizable inflatable replica, clear main features, fabricable PVC panel logic";
-    }
-
-    return "detailed but still fabricable inflatable replica, recognizable features as broad PVC panels and printed graphics";
+  return [
+    `Use a high level of recognizable form detail while keeping the object clearly inflatable.`,
+    `Do not overdo wrinkles; keep seams and creases believable and restrained.`,
+  ].join(" ");
 }
 
-function resolveIntent(userPrompt?: string, productType?: string): ResolvedIntent {
-    const raw = cleanSubject(userPrompt || "custom inflatable object");
-    const text = normalizeText(raw);
-    const selected = normalizeText(productType);
-
-    if (hasAny(text, ["burger", "hamburger", "cheeseburger"])) {
-        return {
-            subject: raw,
-            type: "hamburger inflatable replica",
-            overlayPrompt:
-                "ONE SINGLE inflatable hamburger replica, unmistakably a hamburger, rounded top bun with sesame seed print, bottom bun, visible lettuce band, cheese slice band, burger patty band, optional tomato band, broad soft air-filled PVC volumes, commercial advertising inflatable, centered isolated object, transparent background",
-            inpaintPrompt:
-                "a large commercial inflatable hamburger replica placed in the marked area, unmistakably a hamburger, rounded bun, sesame seed print, lettuce, cheese, patty, glossy PVC, realistic contact shadow",
-            negative:
-                "not a hamburger, generic tube, blue tube, abstract shape, arch, tunnel, letter shape, number shape, hook shape, mascot, animal, person, human, costume, multiple burgers, repeated burgers, collage, pattern, food pile",
-        };
-    }
-
-    if (hasAny(text, ["pinguin", "penguin"])) {
-        return {
-            subject: raw,
-            type: "penguin inflatable mascot",
-            overlayPrompt:
-                "ONE SINGLE inflatable penguin mascot, unmistakably a penguin, black and white penguin body, white belly, black back and head, small orange beak, small orange feet, rounded soft air-filled PVC volumes, cute commercial inflatable mascot, centered isolated object, transparent background",
-            inpaintPrompt:
-                "a large inflatable penguin mascot placed in the marked area, unmistakably a penguin, black and white body, white belly, orange beak, orange feet, glossy PVC, realistic contact shadow",
-            negative:
-                "not a penguin, generic tube, blue tube, abstract shape, arch, tunnel, letter shape, number shape, hook shape, burger, food, dog, cat, human, person, costume, wearable costume, multiple objects, collage, pattern",
-        };
-    }
-
-    if (hasAny(text, ["catel", "cățel", "caine", "câine", "dog", "puppy"])) {
-        return {
-            subject: raw,
-            type: "dog inflatable mascot",
-            overlayPrompt:
-                "ONE SINGLE inflatable dog mascot, unmistakably a dog, cute rounded dog head, floppy ears, snout, paws, soft air-filled PVC body, commercial inflatable mascot, centered isolated object, transparent background",
-            inpaintPrompt:
-                "a large inflatable dog mascot placed in the marked area, unmistakably a dog, rounded head, ears, snout, paws, glossy PVC, realistic contact shadow",
-            negative:
-                "not a dog, generic tube, blue tube, abstract shape, arch, tunnel, burger, penguin, cat, person, human, costume, multiple objects, collage, pattern",
-        };
-    }
-
-    if (hasAny(text, ["pisica", "pisică", "cat", "kitten"])) {
-        return {
-            subject: raw,
-            type: "cat inflatable mascot",
-            overlayPrompt:
-                "ONE SINGLE inflatable cat mascot, unmistakably a cat, rounded cat head, pointed ears, whisker print, paws, soft air-filled PVC body, commercial inflatable mascot, centered isolated object, transparent background",
-            inpaintPrompt:
-                "a large inflatable cat mascot placed in the marked area, unmistakably a cat, pointed ears, whisker print, paws, glossy PVC, realistic contact shadow",
-            negative:
-                "not a cat, generic tube, blue tube, abstract shape, arch, tunnel, burger, penguin, dog, person, human, costume, multiple objects, collage, pattern",
-        };
-    }
-
-    if (hasAny(text, ["urs", "bear"])) {
-        return {
-            subject: raw,
-            type: "bear inflatable mascot",
-            overlayPrompt:
-                "ONE SINGLE inflatable bear mascot, unmistakably a bear, rounded bear head, small round ears, big soft body, paws, commercial inflatable PVC mascot, centered isolated object, transparent background",
-            inpaintPrompt:
-                "a large inflatable bear mascot placed in the marked area, unmistakably a bear, rounded head, small ears, paws, glossy PVC, realistic contact shadow",
-            negative:
-                "not a bear, generic tube, blue tube, abstract shape, arch, tunnel, burger, penguin, dog, person, human, costume, multiple objects, collage, pattern",
-        };
-    }
-
-    if (hasAny(text, ["arcada", "arcadă", "arch", "poarta", "poartă", "portal", "intrare"])) {
-        return {
-            subject: raw,
-            type: "inflatable arch",
-            overlayPrompt:
-                "ONE SINGLE inflatable advertising arch, two vertical legs and one rounded top beam, stable commercial PVC structure, glossy inflatable tubes, centered isolated object, transparent background",
-            inpaintPrompt:
-                "a large inflatable advertising arch placed in the marked area, two vertical legs and rounded top beam, glossy PVC, realistic contact shadow",
-            negative:
-                "penguin, dog, cat, burger, animal, person, human, mascot character, generic pile, multiple objects, collage, pattern",
-        };
-    }
-
-    if (hasAny(text, ["tunel", "tunnel"])) {
-        return {
-            subject: raw,
-            type: "inflatable tunnel",
-            overlayPrompt:
-                "ONE SINGLE inflatable tunnel, rounded entrance, long soft PVC tunnel body, commercial sports event inflatable, centered isolated object, transparent background",
-            inpaintPrompt:
-                "a large inflatable tunnel placed in the marked area, rounded entrance, long PVC body, realistic contact shadow",
-            negative:
-                "penguin, dog, cat, burger, animal, person, human, mascot character, arch if not requested, multiple objects, collage, pattern",
-        };
-    }
-
-    if (hasAny(text, ["cort", "tent", "pavilion"])) {
-        return {
-            subject: raw,
-            type: "inflatable tent",
-            overlayPrompt:
-                "ONE SINGLE inflatable event tent, soft PVC tubular frame, roof canopy, commercial outdoor inflatable pavilion, centered isolated object, transparent background",
-            inpaintPrompt:
-                "a large inflatable event tent placed in the marked area, soft PVC tubular frame and roof canopy, realistic contact shadow",
-            negative:
-                "penguin, dog, cat, burger, animal, person, human, mascot character, multiple objects, collage, pattern",
-        };
-    }
-
-    if (hasAny(text, ["cupola", "cupolă", "dome"])) {
-        return {
-            subject: raw,
-            type: "inflatable dome",
-            overlayPrompt:
-                "ONE SINGLE inflatable dome, rounded hemispherical PVC structure, commercial event inflatable, soft air-filled volume, centered isolated object, transparent background",
-            inpaintPrompt:
-                "a large inflatable dome placed in the marked area, rounded hemispherical PVC structure, realistic contact shadow",
-            negative:
-                "penguin, dog, cat, burger, animal, person, human, mascot character, multiple objects, collage, pattern",
-        };
-    }
-
-    if (
-        hasAny(text, [
-            "sticla",
-            "sticlă",
-            "bottle",
-            "doza",
-            "doză",
-            "can",
-            "cutie",
-            "box",
-            "pahar",
-            "cup",
-            "flacon",
-            "recipient",
-        ]) ||
-        selected.includes("sticla")
-    ) {
-        return {
-            subject: raw,
-            type: "inflatable product replica",
-            overlayPrompt:
-                `ONE SINGLE inflatable product replica of ${raw}, unmistakably matching the requested product type, rounded soft PVC volume, commercial advertising inflatable, centered isolated object, transparent background`,
-            inpaintPrompt:
-                `a large inflatable product replica of ${raw} placed in the marked area, glossy PVC, realistic contact shadow`,
-            negative:
-                "person, human, costume, mascot character, animal, burger if not requested, generic tube, abstract shape, multiple objects, collage, pattern",
-        };
-    }
-
-    if (
-        hasAny(text, [
-            "pizza",
-            "hotdog",
-            "hot dog",
-            "sandwich",
-            "inghetata",
-            "înghețată",
-            "ice cream",
-            "donut",
-            "gogoasa",
-            "gogoașă",
-            "banana",
-            "mar",
-            "măr",
-            "fruct",
-        ])
-    ) {
-        return {
-            subject: raw,
-            type: "food inflatable replica",
-            overlayPrompt:
-                `ONE SINGLE inflatable food replica of ${raw}, unmistakably recognizable as ${raw}, rounded soft PVC commercial advertising inflatable, broad printed food details, centered isolated object, transparent background`,
-            inpaintPrompt:
-                `a large inflatable food replica of ${raw} placed in the marked area, glossy PVC, realistic contact shadow`,
-            negative:
-                "generic tube, abstract shape, arch, tunnel, mascot if not requested, person, human, costume, multiple food objects, collage, pattern",
-        };
-    }
-
-    if (
-        hasAny(text, [
-            "mascota",
-            "mascot",
-            "personaj",
-            "character",
-            "animal",
-            "robot",
-            "dragon",
-            "dinozaur",
-            "dinosaur",
-        ]) ||
-        selected.includes("mascota")
-    ) {
-        return {
-            subject: raw,
-            type: "inflatable mascot",
-            overlayPrompt:
-                `ONE SINGLE inflatable mascot representing ${raw}, unmistakably matching the requested subject, rounded soft PVC body, commercial inflatable character, centered isolated object, transparent background`,
-            inpaintPrompt:
-                `a large inflatable mascot representing ${raw} placed in the marked area, glossy PVC, realistic contact shadow`,
-            negative:
-                "generic tube, abstract shape, arch, tunnel, burger if not requested, wrong animal, person, real human, wearable costume, multiple objects, collage, pattern",
-        };
-    }
-
-    return {
-        subject: raw,
-        type: "custom inflatable object",
-        overlayPrompt:
-            `ONE SINGLE custom inflatable object representing ${raw}, unmistakably matching the written subject, rounded soft PVC commercial inflatable, centered isolated object, transparent background`,
-        inpaintPrompt:
-            `a large custom inflatable object representing ${raw} placed in the marked area, glossy PVC, realistic contact shadow`,
-        negative:
-            "generic tube, abstract shape, wrong object, person, human, costume, multiple objects, collage, pattern, unrelated inflatable",
-    };
+function buildPlacementInstruction(placement: Placement) {
+  if (placement === "roof") {
+    return `Place the inflatable on the roof / top of the building, fully supported and physically plausible.`;
+  }
+  if (placement === "wall") {
+    return `Place the inflatable attached to or emerging from the wall / facade area in a physically plausible way.`;
+  }
+  return `Place the inflatable on the ground plane. The base/support of the object must sit exactly on the selected marker point.`;
 }
 
-function buildOverlayPrompt(options: {
-    intent: ResolvedIntent;
-    material?: string;
-    lighting?: string;
-    shapeDetail: number;
-    dimensions?: RequestBody["dimensions"];
-}) {
-    const heightM = clamp(Number(options.dimensions?.heightM ?? 3), 0.5, 20);
-    const widthM = clamp(Number(options.dimensions?.widthM ?? 3), 0.5, 20);
-    const depthM = clamp(Number(options.dimensions?.depthM ?? 1.2), 0.2, 10);
+function buildLightingInstruction(lighting: Lighting, material: string) {
+  const materialBlock =
+    material === "pvc-matte"
+      ? "Use matte PVC inflatable material."
+      : material === "white-translucent"
+      ? "Use white translucent inflatable material."
+      : material === "led-interior"
+      ? "Use an inflatable material that can glow from interior LED lighting."
+      : "Use glossy PVC inflatable material.";
 
-    return `
-${options.intent.overlayPrompt}.
+  if (lighting === "night") {
+    return `${materialBlock} Match a night environment: darker scene, realistic night exposure, believable shadows and highlights, and if appropriate a subtle internal glow only when material suggests it.`;
+  }
 
-Material: ${getMaterialText(options.material)}.
-Lighting: ${getLightingText(options.lighting)}.
-Form detail: ${getDetailText(options.shapeDetail)}.
-Approximate proportions: height ${heightM.toFixed(1)}m, width ${widthM.toFixed(1)}m, depth ${depthM.toFixed(1)}m.
-
-CRITICAL RULES:
-Generate exactly one single object.
-The object must match this subject: ${options.intent.subject}.
-The object must be recognizable as: ${options.intent.type}.
-Transparent background only.
-No scene.
-No floor.
-No building.
-No people.
-No repeated objects.
-No collage.
-No pattern.
-No image sheet.
-No rectangular background.
-No generic inflatable tube unless the subject itself is a tube.
-No unrelated object.
-Complete object, not cropped.
-Commercial inflatable PVC construction.
-`.trim();
+  return `${materialBlock} Match the current daytime environment with believable daylight, highlights, contact shadows, and realistic integration.`;
 }
 
-function buildOverlayNegativePrompt(intent: ResolvedIntent) {
-    return `
-${intent.negative},
-wrong subject,
-unrelated object,
-generic inflatable,
-generic blue tube,
-abstract inflatable,
-inflatable hook,
-letter shape,
-number shape,
-question mark shape,
-arch if not requested,
-tunnel if not requested,
-person,
-human,
-man,
-woman,
-child,
-face,
-mask,
-helmet,
-wearable costume,
-real person in costume,
-mannequin,
-multiple objects,
-two objects,
-many objects,
-repeated objects,
-pattern,
-tile,
-tiled image,
-collage,
-grid,
-poster,
-product sheet,
-sprite sheet,
-background,
-white background,
-black background,
-colored background,
-rectangular patch,
-image patch,
-scene,
-floor,
-ground,
-building,
-street,
-trees,
-cars,
-watermark,
-text,
-bad transparent edge,
-cropped object,
-cut off object,
-deformed subject,
-unrecognizable subject
-`.trim();
+function buildRespectInstruction(input: GenerateRequest) {
+  const parts: string[] = [];
+  if (input.referenceImage) {
+    parts.push(`A product reference image is provided.`);
+  }
+  if (input.logoImage) {
+    parts.push(`A logo / print / texture reference is provided.`);
+  }
+
+  if (input.respectShape) parts.push(`Respect the reference shape as much as possible.`);
+  if (input.respectTexture) parts.push(`Respect the reference texture / material as much as possible.`);
+  if (input.respectProportions) parts.push(`Respect the reference proportions as much as possible.`);
+  if (input.respectBranding) parts.push(`Respect the reference branding / print placement as much as possible.`);
+
+  parts.push(`Overall reference fidelity target is about ${input.respectPercent}%.`);
+
+  return parts.join(" ");
 }
 
-function buildInpaintPrompt(options: {
-    intent: ResolvedIntent;
-    material?: string;
-    lighting?: string;
-    shapeDetail: number;
-    placementMode?: string;
-    dimensions?: RequestBody["dimensions"];
-}) {
-    const heightM = clamp(Number(options.dimensions?.heightM ?? 3), 0.5, 20);
-    const widthM = clamp(Number(options.dimensions?.widthM ?? 3), 0.5, 20);
-    const depthM = clamp(Number(options.dimensions?.depthM ?? 1.2), 0.2, 10);
+function buildStyleInstruction(renderStyle: RenderStyle) {
+  if (renderStyle === "mockup") {
+    return [
+      `Generate a realistic inflatable mockup integrated into the scene.`,
+      `This MUST look like a perspective 3D mockup, not a flat orthographic front view and not a sticker pasted on the image.`,
+      `Use a clear 3/4 perspective when the object allows it, consistent with the camera perspective of the scene.`,
+      `Keep it visually clean, readable, and commercially useful.`,
+    ].join(" ");
+  }
 
-    const detailNote =
-        options.shapeDetail <= 25
-            ? "Keep the inflatable form clean and not over-detailed. Details should be broad printed PVC graphics, not complex sculptural parts."
-            : options.shapeDetail <= 55
-              ? "Use balanced detail. Preserve recognizability, but keep the shape fabricable as a real PVC inflatable."
-              : "Use detailed visual identity, but keep the object manufacturable as a large PVC inflatable.";
-
-    return `
-Edit only the white masked area of the original photograph.
-
-Insert ${options.intent.inpaintPrompt}.
-
-The generated inflatable must match this exact subject: ${options.intent.subject}.
-The generated inflatable must be recognizable as: ${options.intent.type}.
-
-Placement mode: ${options.placementMode || "Pe sol"}.
-Approximate dimensions: height ${heightM.toFixed(1)}m, width ${widthM.toFixed(1)}m, depth ${depthM.toFixed(1)}m.
-Material: ${getMaterialText(options.material)}.
-Lighting: match the original photo and ${getLightingText(options.lighting)}.
-Form detail: ${getDetailText(options.shapeDetail)}.
-
-Detail control:
-${detailNote}
-
-Rules:
-Preserve the original image outside the mask.
-Do not alter the building, windows, pavement, vegetation or background outside the mask.
-The object must physically touch the target surface unless suspended.
-Add realistic contact shadow.
-Match camera perspective.
-No people.
-No costume.
-No unrelated object.
-`.trim();
+  return [
+    `Generate a photorealistic inflatable object seamlessly integrated into the scene.`,
+    `It must look like a real photographed inflatable present in the location, with correct perspective, contact shadow, cast shadow, lighting, and material response.`,
+  ].join(" ");
 }
 
-function buildInpaintNegativePrompt(intent: ResolvedIntent) {
-    return `
-${intent.negative},
-wrong subject,
-unrelated object,
-person,
-human,
-man,
-woman,
-child,
-wearable costume,
-mannequin,
-multiple objects,
-collage,
-pattern,
-generic tube,
-abstract shape,
-changed background,
-changed building,
-changed windows,
-changed pavement,
-distorted facade,
-floating object,
-no contact shadow,
-bad perspective,
-watermark,
-text
-`.trim();
+function buildPrompt(input: GenerateRequest) {
+  const subjectLabel = resolveSubjectLabel(input.prompt, input.detectedType, input.category);
+  const cleanedPrompt = normalizePromptText(input.prompt);
+  const effectiveHeight =
+    input.renderStyle === "photorealism"
+      ? input.targetHeightM * 3
+      : input.targetHeightM;
+
+  const subjectBlock = cleanedPrompt
+    ? `Requested subject / concept: "${cleanedPrompt}". Interpret this as a ${subjectLabel}.`
+    : `Create a ${subjectLabel}.`;
+
+  const prompt = [
+    `Image A is the location / scene photo and is the direct edit target.`,
+    input.referenceImage
+      ? `Image B is the product / subject reference image.`
+      : ``,
+    input.referenceImage && input.logoImage
+      ? `Image C is the logo / print / texture reference image.`
+      : !input.referenceImage && input.logoImage
+      ? `Image B is the logo / print / texture reference image.`
+      : ``,
+    `Edit the scene photo by placing exactly ONE inflatable object in the masked area only.`,
+    `Preserve the entire background scene outside the masked area.`,
+    subjectBlock,
+    buildStyleInstruction(input.renderStyle),
+    buildRespectInstruction(input),
+    buildPlacementInstruction(input.placement),
+    buildLightingInstruction(input.lighting, input.material),
+    buildDetailInstruction(subjectLabel, input.detailPercent, input.renderStyle),
+    `The selected marker is the exact anchor point. The generated object must be positioned exactly there with no extra offset.`,
+    `Marker coordinates are approximately X ${input.positionX.toFixed(1)}%, Y ${input.positionY.toFixed(1)}% of the image.`,
+    `Requested target height is ${input.targetHeightM.toFixed(1)} meters.`,
+    `For ${input.renderStyle === "photorealism" ? "FOTOREALISM" : "MOCKUP"} generation, use effective scale guidance of about ${effectiveHeight.toFixed(1)} meters as requested by the user.`,
+    `Use visual clues in the scene such as doors, windows, fence, sign, walls, and ground plane to infer believable size and perspective.`,
+    `The object must feel correctly dimensioned relative to the architecture; do not make it arbitrarily tiny or huge.`,
+    `Make the object clearly readable and recognizable. Do not generate an unrelated object.`,
+    `Produce believable contact shadow and cast shadow on the ground / nearby surfaces whenever physically appropriate.`,
+    `Do not generate extra people, extra props, or multiple copies of the object.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return prompt;
 }
 
-async function generateOverlayImage(options: {
-    stabilityKey: string;
-    finalPrompt: string;
-    negativePrompt: string;
-}) {
-    const formData = new FormData();
-    formData.append("prompt", options.finalPrompt);
-    formData.append("negative_prompt", options.negativePrompt);
-    formData.append("output_format", "png");
-    formData.append("aspect_ratio", "1:1");
+async function maybeAdjustSceneForLighting(sceneDataUrl: string, lighting: Lighting) {
+  const originalBuffer = dataUrlToBuffer(sceneDataUrl);
 
-    const generateResponse = await fetch(
-        "https://api.stability.ai/v2beta/stable-image/generate/core",
-        {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${options.stabilityKey}`,
-                Accept: "application/json",
-            },
-            body: formData,
-        }
-    );
+  if (lighting !== "night") {
+    return bufferToDataUrl(originalBuffer);
+  }
 
-    if (!generateResponse.ok) {
-        const errorText = await generateResponse.text();
-        throw new Error(`Eroare Stability Generate: ${errorText}`);
-    }
+  const nightBuffer = await sharp(originalBuffer)
+    .modulate({
+      brightness: 0.38,
+      saturation: 0.78,
+    })
+    .tint({ r: 170, g: 185, b: 220 })
+    .png()
+    .toBuffer();
 
-    const generatedData = await generateResponse.json();
-
-    if (!generatedData.image) {
-        throw new Error("Stability nu a returnat nicio imagine.");
-    }
-
-    const generatedBlob = base64ToBlob(generatedData.image, "image/png");
-
-    const bgFormData = new FormData();
-    bgFormData.append("image", generatedBlob, "generated.png");
-    bgFormData.append("output_format", "png");
-
-    const bgResponse = await fetch(
-        "https://api.stability.ai/v2beta/stable-image/edit/remove-background",
-        {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${options.stabilityKey}`,
-                Accept: "application/json",
-            },
-            body: bgFormData,
-        }
-    );
-
-    if (!bgResponse.ok) {
-        return {
-            overlayUrl: `data:image/png;base64,${generatedData.image}`,
-            warning: "Remove background failed; using original generated image.",
-        };
-    }
-
-    const bgData = await bgResponse.json();
-    const finalImageBase64 = bgData.image || bgData.base64;
-
-    if (!finalImageBase64) {
-        return {
-            overlayUrl: `data:image/png;base64,${generatedData.image}`,
-            warning:
-                "Remove background nu a returnat imagine; se folosește imaginea generată inițial.",
-        };
-    }
-
-    return {
-        overlayUrl: `data:image/png;base64,${finalImageBase64}`,
-    };
-}
-
-async function generateInpaintImage(options: {
-    stabilityKey: string;
-    sceneImage: string;
-    maskImage: string;
-    finalPrompt: string;
-    negativePrompt: string;
-}) {
-    const imageBlob = base64ToBlob(options.sceneImage, "image/jpeg");
-    const maskBlob = base64ToBlob(options.maskImage, "image/png");
-
-    const formData = new FormData();
-    formData.append("image", imageBlob, "scene.jpg");
-    formData.append("mask", maskBlob, "mask.png");
-    formData.append("prompt", options.finalPrompt);
-    formData.append("negative_prompt", options.negativePrompt);
-    formData.append("output_format", "png");
-
-    const response = await fetch(
-        "https://api.stability.ai/v2beta/stable-image/edit/inpaint",
-        {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${options.stabilityKey}`,
-                Accept: "application/json",
-            },
-            body: formData,
-        }
-    );
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Eroare Stability Inpaint: ${errorText}`);
-    }
-
-    const data = await response.json();
-    const imageBase64 = data.image || data.base64;
-
-    if (!imageBase64) {
-        throw new Error("Stability Inpaint nu a returnat imagine.");
-    }
-
-    return {
-        resultSceneUrl: `data:image/png;base64,${imageBase64}`,
-    };
+  return bufferToDataUrl(Buffer.from(nightBuffer), "image/png");
 }
 
 export async function POST(req: Request) {
-    try {
-        const body = (await req.json()) as RequestBody;
+  try {
+    const body = (await req.json()) as GenerateRequest;
 
-        const {
-            sceneImage,
-            maskImage,
-            userPrompt = "",
-            prompt = "",
-            productType = "Custom",
-            selectedUiProductType = "",
-            placementMode = "Pe sol",
-            renderPipeline,
-            generateMode = "replica",
-            dimensions,
-            material = "PVC lucios",
-            lighting = "Zi",
-            shapeDetail = 35,
-            placement,
-            adjustments,
-        } = body;
-
-        const stabilityKey = process.env.STABILITY_API_KEY;
-
-        if (!stabilityKey) {
-            return NextResponse.json(
-                { error: "Lipsește STABILITY_API_KEY în Vercel." },
-                { status: 400 }
-            );
-        }
-
-        const cleanPrompt = cleanSubject(userPrompt || prompt || "custom inflatable object");
-        const intent = resolveIntent(cleanPrompt, productType);
-        const shapeDetailValue = clamp(Number(shapeDetail), 15, 100);
-
-        const pipeline: RenderPipeline =
-            renderPipeline || (generateMode === "replica" ? "inpaint" : "overlay");
-
-        if (pipeline === "inpaint") {
-            if (!sceneImage) {
-                return NextResponse.json(
-                    { error: "Pentru fotorealism lipsește sceneImage." },
-                    { status: 400 }
-                );
-            }
-
-            if (!maskImage) {
-                return NextResponse.json(
-                    { error: "Pentru fotorealism lipsește maskImage." },
-                    { status: 400 }
-                );
-            }
-
-            const finalPrompt = buildInpaintPrompt({
-                intent,
-                material,
-                lighting,
-                shapeDetail: shapeDetailValue,
-                placementMode,
-                dimensions,
-            });
-
-            const negativePrompt = buildInpaintNegativePrompt(intent);
-
-            const result = await generateInpaintImage({
-                stabilityKey,
-                sceneImage,
-                maskImage,
-                finalPrompt,
-                negativePrompt,
-            });
-
-            return NextResponse.json({
-                resultSceneUrl: result.resultSceneUrl,
-                compositedUrl: result.resultSceneUrl,
-                finalImageUrl: result.resultSceneUrl,
-                prompt: finalPrompt,
-                negativePrompt,
-                debug: {
-                    pipeline,
-                    resolvedSubject: intent.subject,
-                    resolvedType: intent.type,
-                    originalProductType: productType,
-                    selectedUiProductType,
-                    placementMode,
-                    generateMode,
-                    material,
-                    lighting,
-                    shapeDetail: shapeDetailValue,
-                    dimensions,
-                    placement,
-                    adjustments,
-                },
-            });
-        }
-
-        const finalPrompt = buildOverlayPrompt({
-            intent,
-            material,
-            lighting,
-            shapeDetail: shapeDetailValue,
-            dimensions,
-        });
-
-        const negativePrompt = buildOverlayNegativePrompt(intent);
-
-        const overlayResult = await generateOverlayImage({
-            stabilityKey,
-            finalPrompt,
-            negativePrompt,
-        });
-
-        return NextResponse.json({
-            overlayUrl: overlayResult.overlayUrl,
-            warning: overlayResult.warning,
-            prompt: finalPrompt,
-            negativePrompt,
-            debug: {
-                pipeline,
-                resolvedSubject: intent.subject,
-                resolvedType: intent.type,
-                originalProductType: productType,
-                selectedUiProductType,
-                placementMode,
-                generateMode,
-                material,
-                lighting,
-                shapeDetail: shapeDetailValue,
-                dimensions,
-                placement,
-                adjustments,
-            },
-        });
-    } catch (error: any) {
-        console.error("Generate route error:", error);
-
-        return NextResponse.json(
-            {
-                error: error.message || "Eroare internă server.",
-            },
-            { status: 500 }
-        );
+    if (!body.sceneImage) {
+      return NextResponse.json({ error: "Missing scene image." }, { status: 400 });
     }
+
+    if (!body.maskImage) {
+      return NextResponse.json({ error: "Missing mask image." }, { status: 400 });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "Missing OPENAI_API_KEY environment variable." },
+        { status: 500 }
+      );
+    }
+
+    const prompt = buildPrompt(body);
+    const adjustedSceneDataUrl = await maybeAdjustSceneForLighting(
+      body.sceneImage,
+      body.lighting
+    );
+
+    const sceneFile = dataUrlToBlob(adjustedSceneDataUrl, "scene");
+    const maskFile = dataUrlToBlob(body.maskImage, "mask");
+    const referenceFile = body.referenceImage
+      ? dataUrlToBlob(body.referenceImage, "reference")
+      : null;
+    const logoFile = body.logoImage
+      ? dataUrlToBlob(body.logoImage, "logo")
+      : null;
+
+    const form = new FormData();
+
+    form.append("model", "gpt-image-1");
+    form.append("prompt", prompt);
+    form.append("size", "1536x1536");
+    form.append("quality", "high");
+    form.append("image[]", sceneFile.blob, sceneFile.filename);
+    form.append("mask", maskFile.blob, maskFile.filename);
+
+    if (referenceFile) {
+      form.append("image[]", referenceFile.blob, referenceFile.filename);
+    }
+
+    if (logoFile) {
+      form.append("image[]", logoFile.blob, logoFile.filename);
+    }
+
+    const response = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: form,
+    });
+
+    const json = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          error:
+            json?.error?.message ||
+            json?.message ||
+            "Image generation failed.",
+          debugPrompt: prompt,
+        },
+        { status: response.status }
+      );
+    }
+
+    const b64 = json?.data?.[0]?.b64_json;
+    if (!b64) {
+      return NextResponse.json(
+        {
+          error: "No image returned from API.",
+          raw: json,
+          debugPrompt: prompt,
+        },
+        { status: 500 }
+      );
+    }
+
+    const outputDataUrl = `data:image/png;base64,${b64}`;
+
+    return NextResponse.json({
+      imageDataUrl: outputDataUrl,
+      debugPrompt: prompt,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        error: error?.message || "Unexpected server error.",
+      },
+      { status: 500 }
+    );
+  }
 }
