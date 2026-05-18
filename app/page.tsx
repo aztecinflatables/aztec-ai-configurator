@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 
-type GenerateMode = "rapid" | "photo" | "replica";
+type GenerateMode = "rapid" | "replica";
 
 type MaterialMode =
     | "PVC lucios"
@@ -45,9 +45,9 @@ const PRODUCT_PRESETS: Record<ApiProductType, string> = {
     Custom:
         "Obiect gonflabil personalizat, realist, fabricabil, cu formă stabilă, material PVC profesional și proporții comerciale.",
     "Replică food":
-        "Replică gonflabilă publicitară a unui produs alimentar, recognoscibilă, realizabilă în PVC lucios, cu formă simplificată, volume rotunjite și zone late imprimate pentru detalii. Nu este mascotă, nu este costum, nu este om.",
+        "Replică gonflabilă publicitară a unui produs alimentar, recognoscibilă, realizabilă în PVC lucios, formă simplificată, volume rotunjite și zone late imprimate pentru detalii.",
     "Replică produs":
-        "Replică gonflabilă de produs, proporții recognoscibile, volum moale, PVC lucios, formă simplificată și fabricabilă. Nu este mascotă, nu este costum, nu este om.",
+        "Replică gonflabilă de produs, proporții recognoscibile, volum moale, PVC lucios, formă simplificată și fabricabilă.",
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -325,10 +325,12 @@ function makeProceduralInflatableSvgDataUrl(options: {
         prompt.includes("burger") ||
         prompt.includes("hamburger");
 
+    const isPenguin = prompt.includes("pinguin") || prompt.includes("penguin");
+
     const ledGlow = options.material === "LED interior" || options.material === "Alb translucid";
     const night = options.lighting === "Noapte";
     const warm = options.lighting === "Golden hour";
-    const detailT = clamp(options.shapeDetail / 10, 0, 1);
+    const detailT = clamp(options.shapeDetail / 100, 0.15, 1);
 
     const bgGlow = ledGlow
         ? `<ellipse cx="512" cy="418" rx="430" ry="230" fill="rgba(255,215,125,0.22)" filter="url(#blurGlow)" />`
@@ -343,24 +345,45 @@ function makeProceduralInflatableSvgDataUrl(options: {
     if (isBurger) {
         body = `
             <g filter="url(#softShadow)">
-                <ellipse cx="512" cy="540" rx="370" ry="${170 + detailT * 18}" fill="url(#burgerBody)" />
-                <ellipse cx="512" cy="535" rx="365" ry="${165 + detailT * 15}" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
-                <ellipse cx="512" cy="540" rx="370" ry="${170 + detailT * 18}" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
-                <ellipse cx="512" cy="470" rx="305" ry="82" fill="rgba(255,227,165,0.60)" />
-                <rect x="220" y="520" width="584" height="26" rx="13" fill="#c34f42" opacity="0.95" />
-                <rect x="210" y="554" width="604" height="20" rx="10" fill="#8db83c" opacity="0.96" />
-                <rect x="225" y="585" width="574" height="28" rx="14" fill="#654128" opacity="0.96" />
-                <rect x="240" y="624" width="544" height="20" rx="10" fill="#cda32f" opacity="0.95" />
-                <path d="M248 435 C365 376 660 376 774 435" stroke="rgba(255,255,255,0.28)" stroke-width="18" stroke-linecap="round" fill="none" />
+                <ellipse cx="512" cy="545" rx="360" ry="${155 + detailT * 24}" fill="url(#burgerBody)" />
+                <ellipse cx="512" cy="530" rx="350" ry="${145 + detailT * 18}" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="545" rx="360" ry="${155 + detailT * 24}" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
+                <ellipse cx="512" cy="465" rx="300" ry="78" fill="rgba(255,228,166,0.72)" />
+                <rect x="230" y="514" width="564" height="24" rx="12" fill="#c34f42" opacity="0.96" />
+                <rect x="218" y="548" width="588" height="20" rx="10" fill="#79b83b" opacity="0.98" />
+                <rect x="235" y="580" width="554" height="30" rx="15" fill="#654128" opacity="0.98" />
+                <rect x="250" y="622" width="524" height="22" rx="11" fill="#d3a22c" opacity="0.98" />
+                <circle cx="430" cy="438" r="7" fill="#fff4d8" opacity="0.65" />
+                <circle cx="495" cy="424" r="6" fill="#fff4d8" opacity="0.65" />
+                <circle cx="560" cy="435" r="7" fill="#fff4d8" opacity="0.65" />
+                <circle cx="620" cy="452" r="5" fill="#fff4d8" opacity="0.65" />
+                <path d="M250 435 C365 380 660 380 775 435" stroke="rgba(255,255,255,0.28)" stroke-width="18" stroke-linecap="round" fill="none" />
+            </g>
+        `;
+    } else if (isPenguin) {
+        body = `
+            <g filter="url(#softShadow)">
+                <ellipse cx="512" cy="555" rx="230" ry="320" fill="#111827" />
+                <ellipse cx="512" cy="595" rx="150" ry="240" fill="#f8fafc" />
+                <ellipse cx="512" cy="320" rx="175" ry="150" fill="#111827" />
+                <ellipse cx="455" cy="310" rx="34" ry="38" fill="#ffffff" />
+                <ellipse cx="570" cy="310" rx="34" ry="38" fill="#ffffff" />
+                <circle cx="455" cy="318" r="13" fill="#111827" />
+                <circle cx="570" cy="318" r="13" fill="#111827" />
+                <path d="M500 350 L540 350 L520 386 Z" fill="#f59e0b" />
+                <ellipse cx="388" cy="820" rx="82" ry="34" fill="#f59e0b" />
+                <ellipse cx="636" cy="820" rx="82" ry="34" fill="#f59e0b" />
+                <ellipse cx="512" cy="555" rx="230" ry="320" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="555" rx="230" ry="320" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
             </g>
         `;
     } else {
         body = `
             <g filter="url(#softShadow)">
-                <ellipse cx="512" cy="540" rx="360" ry="195" fill="url(#genericBase)" />
-                <ellipse cx="512" cy="536" rx="356" ry="191" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
-                <ellipse cx="512" cy="540" rx="360" ry="195" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
-                <path d="M240 415 C348 360 676 360 784 415" stroke="rgba(255,255,255,0.28)" stroke-width="20" stroke-linecap="round" fill="none" />
+                <ellipse cx="512" cy="540" rx="330" ry="210" fill="url(#genericBase)" />
+                <ellipse cx="512" cy="536" rx="326" ry="206" fill="url(#surfaceGloss)" opacity="${glossyOpacity}" />
+                <ellipse cx="512" cy="540" rx="330" ry="210" fill="none" stroke="rgba(255,255,255,${seamOpacity})" stroke-width="6" />
+                <path d="M250 415 C360 365 664 365 774 415" stroke="rgba(255,255,255,0.28)" stroke-width="20" stroke-linecap="round" fill="none" />
             </g>
         `;
     }
@@ -418,7 +441,7 @@ export default function Page() {
     const [selectedProductType, setSelectedProductType] = useState<ProductType>("Mascotă");
     const [placementMode, setPlacementMode] = useState<PlacementMode>("Pe sol");
 
-    const [generateMode, setGenerateMode] = useState<GenerateMode>("photo");
+    const [generateMode, setGenerateMode] = useState<GenerateMode>("rapid");
 
     const [respectReference, setRespectReference] = useState(85);
     const [respectShape, setRespectShape] = useState(true);
@@ -480,7 +503,7 @@ export default function Page() {
         hue-rotate(${objectWarmth < 0 ? objectWarmth : -objectWarmth * 0.12}deg)
     `;
 
-    const clearResults = () => {
+    const resetGeneratedResult = () => {
         setOverlayUrl(null);
         setResultSceneUrl(null);
         setMaskDebugUrl(null);
@@ -523,10 +546,7 @@ export default function Page() {
         const base64 = await fileToBase64(file);
         setSceneBase64(base64);
         setSceneImage(`data:${file.type};base64,${base64}`);
-        setResultSceneUrl(null);
-        setOverlayUrl(null);
-        setMaskDebugUrl(null);
-        setError(null);
+        resetGeneratedResult();
     };
 
     const handleRefUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -535,7 +555,7 @@ export default function Page() {
 
         const base64 = await fileToBase64(file);
         setRefImage(base64);
-        clearResults();
+        resetGeneratedResult();
     };
 
     const handleTextureUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -544,7 +564,7 @@ export default function Page() {
 
         const base64 = await fileToBase64(file);
         setTextureImage(base64);
-        clearResults();
+        resetGeneratedResult();
     };
 
     const getContainedImageRect = () => {
@@ -714,7 +734,6 @@ export default function Page() {
 
         setPosX(clamp(x, 0, 100));
         setPosY(clamp(y, 0, 180));
-        clearResults();
     };
 
     const handleGenerate = async () => {
@@ -729,9 +748,7 @@ export default function Page() {
         setResultSceneUrl(null);
 
         try {
-            const proceduralMode = generateMode === "rapid" && shapeDetail <= 10;
-
-            if (proceduralMode) {
+            if (generateMode === "rapid") {
                 const proceduralUrl = makeProceduralInflatableSvgDataUrl({
                     prompt: subjectPrompt,
                     productType: effectiveProductType,
@@ -751,7 +768,7 @@ export default function Page() {
             const maskBase64 = buildMaskBase64();
 
             if (!maskBase64) {
-                throw new Error("Nu am putut genera masca pentru inpaint.");
+                throw new Error("Nu am putut genera masca pentru fotorealism.");
             }
 
             const response = await fetch("/api/generate", {
@@ -770,8 +787,8 @@ export default function Page() {
                     productType: effectiveProductType,
                     selectedUiProductType: selectedProductType,
                     placementMode,
-                    generateMode,
-                    renderPipeline: generateMode === "replica" ? "inpaint" : "overlay",
+                    generateMode: "replica",
+                    renderPipeline: "inpaint",
                     referenceControl: {
                         respectReference,
                         respectShape,
@@ -821,19 +838,11 @@ export default function Page() {
             if (data.compositedUrl || data.resultSceneUrl || data.finalImageUrl) {
                 setResultSceneUrl(data.compositedUrl || data.resultSceneUrl || data.finalImageUrl);
                 setOverlayUrl(null);
-
-                setHasGeneratedSimulation(true);
-                setEstimatedWidthM(derived.widthM);
-                setEstimatedDepthM(derived.depthM);
-            } else if (data.overlayUrl) {
-                setOverlayUrl(data.overlayUrl);
-                setResultSceneUrl(null);
-
                 setHasGeneratedSimulation(true);
                 setEstimatedWidthM(derived.widthM);
                 setEstimatedDepthM(derived.depthM);
             } else {
-                throw new Error("API-ul nu a returnat un rezultat valid.");
+                throw new Error("API-ul nu a returnat o imagine fotorealistă validă.");
             }
         } catch (err: any) {
             setError(err.message || "Eroare necunoscută.");
@@ -910,7 +919,7 @@ export default function Page() {
                                 value={userPrompt}
                                 onChange={(e) => {
                                     setUserPrompt(e.target.value);
-                                    clearResults();
+                                    resetGeneratedResult();
                                 }}
                                 placeholder="Ex: burger, arcadă AZTEC, mascotă urs, sticlă de suc..."
                             />
@@ -935,7 +944,7 @@ export default function Page() {
                                             type="button"
                                             onClick={() => {
                                                 setSelectedProductType(chip);
-                                                clearResults();
+                                                resetGeneratedResult();
                                             }}
                                             style={{
                                                 border: active
@@ -973,7 +982,7 @@ export default function Page() {
                                     const next = e.target.value as PlacementMode;
                                     setPlacementMode(next);
                                     resetShadowForPlacement(next);
-                                    clearResults();
+                                    resetGeneratedResult();
                                 }}
                             >
                                 <option>Pe sol</option>
@@ -998,7 +1007,7 @@ export default function Page() {
                                     type="button"
                                     onClick={() => {
                                         setGenerateMode("rapid");
-                                        clearResults();
+                                        resetGeneratedResult();
                                     }}
                                     className={
                                         generateMode === "rapid"
@@ -1012,34 +1021,18 @@ export default function Page() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setGenerateMode("photo");
-                                        clearResults();
+                                        setGenerateMode("replica");
+                                        resetGeneratedResult();
                                     }}
                                     className={
-                                        generateMode === "photo"
+                                        generateMode === "replica"
                                             ? "aztec-tab aztec-tab-active"
                                             : "aztec-tab"
                                     }
                                 >
-                                    FOTO
+                                    FOTOREALISM
                                 </button>
                             </div>
-
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setGenerateMode("replica");
-                                    clearResults();
-                                }}
-                                className={
-                                    generateMode === "replica"
-                                        ? "aztec-tab aztec-tab-active"
-                                        : "aztec-tab"
-                                }
-                                style={{ width: "100%", marginTop: 8 }}
-                            >
-                                REPLICĂ EXACTĂ
-                            </button>
                         </div>
                     </section>
 
@@ -1064,7 +1057,7 @@ export default function Page() {
                                 value={respectReference}
                                 onChange={(e) => {
                                     setRespectReference(Number(e.target.value));
-                                    clearResults();
+                                    resetGeneratedResult();
                                 }}
                             />
 
@@ -1083,7 +1076,7 @@ export default function Page() {
                                         checked={respectShape}
                                         onChange={(e) => {
                                             setRespectShape(e.target.checked);
-                                            clearResults();
+                                            resetGeneratedResult();
                                         }}
                                     />
                                     Forma
@@ -1096,7 +1089,7 @@ export default function Page() {
                                         checked={respectTexture}
                                         onChange={(e) => {
                                             setRespectTexture(e.target.checked);
-                                            clearResults();
+                                            resetGeneratedResult();
                                         }}
                                     />
                                     Textura
@@ -1109,7 +1102,7 @@ export default function Page() {
                                         checked={respectProportions}
                                         onChange={(e) => {
                                             setRespectProportions(e.target.checked);
-                                            clearResults();
+                                            resetGeneratedResult();
                                         }}
                                     />
                                     Proporții
@@ -1122,7 +1115,7 @@ export default function Page() {
                                         checked={respectBranding}
                                         onChange={(e) => {
                                             setRespectBranding(e.target.checked);
-                                            clearResults();
+                                            resetGeneratedResult();
                                         }}
                                     />
                                     Branding
@@ -1153,7 +1146,7 @@ export default function Page() {
                                 value={heightM}
                                 onChange={(e) => {
                                     setHeightM(Number(e.target.value));
-                                    clearResults();
+                                    resetGeneratedResult();
                                 }}
                             />
 
@@ -1165,12 +1158,12 @@ export default function Page() {
                             <input
                                 className="aztec-slider"
                                 type="range"
-                                min={0}
+                                min={15}
                                 max={100}
                                 value={shapeDetail}
                                 onChange={(e) => {
                                     setShapeDetail(Number(e.target.value));
-                                    clearResults();
+                                    resetGeneratedResult();
                                 }}
                             />
 
@@ -1208,7 +1201,7 @@ export default function Page() {
                                 value={material}
                                 onChange={(e) => {
                                     setMaterial(e.target.value as MaterialMode);
-                                    clearResults();
+                                    resetGeneratedResult();
                                 }}
                             >
                                 <option>PVC lucios</option>
@@ -1226,7 +1219,7 @@ export default function Page() {
                                 value={lighting}
                                 onChange={(e) => {
                                     setLighting(e.target.value);
-                                    clearResults();
+                                    resetGeneratedResult();
 
                                     if (e.target.value === "Noapte") {
                                         setObjectBrightness(78);
@@ -1285,7 +1278,6 @@ export default function Page() {
                                 value={posX}
                                 onChange={(e) => {
                                     setPosX(Number(e.target.value));
-                                    clearResults();
                                 }}
                             />
 
@@ -1303,14 +1295,13 @@ export default function Page() {
                                 value={posY}
                                 onChange={(e) => {
                                     setPosY(Number(e.target.value));
-                                    clearResults();
                                 }}
                             />
 
                             {generateMode === "replica" && (
                                 <>
                                     <div className="aztec-slider-header" style={{ marginTop: 12 }}>
-                                        <div className="aztec-label">Mărime zonă inpaint</div>
+                                        <div className="aztec-label">Mărime zonă fotorealism</div>
                                         <div className="aztec-slider-value">{inpaintAreaScale}%</div>
                                     </div>
 
@@ -1322,7 +1313,7 @@ export default function Page() {
                                         value={inpaintAreaScale}
                                         onChange={(e) => {
                                             setInpaintAreaScale(Number(e.target.value));
-                                            clearResults();
+                                            resetGeneratedResult();
                                         }}
                                     />
                                 </>
@@ -1331,11 +1322,11 @@ export default function Page() {
                             {!hasGeneratedVisual && (
                                 <div className="aztec-info-box" style={{ marginTop: 12 }}>
                                     Click pe imagine sau folosește X/Y pentru punctul de sprijin.
-                                    Controalele de scală, rotație, umbră și integrare apar după generare.
+                                    Scală, rotație, umbră și integrare apar după generare.
                                 </div>
                             )}
 
-                            {hasGeneratedVisual && (
+                            {hasGeneratedVisual && generateMode === "rapid" && (
                                 <>
                                     <div className="aztec-slider-header" style={{ marginTop: 12 }}>
                                         <div className="aztec-label">Scală pe imagine</div>
@@ -1373,7 +1364,7 @@ export default function Page() {
                         </div>
                     </section>
 
-                    {hasGeneratedVisual && (
+                    {hasGeneratedVisual && generateMode === "rapid" && (
                         <section className="aztec-section">
                             <div className="aztec-section-button aztec-section-button-active">
                                 8. UMBRĂ & INTEGRARE
@@ -1614,10 +1605,10 @@ export default function Page() {
                     <span>Y {posY.toFixed(1)}%</span>
                 </div>
 
-                {maskDebugUrl && (
+                {maskDebugUrl && generateMode === "replica" && (
                     <details style={{ marginTop: 10, color: "white" }}>
                         <summary style={{ cursor: "pointer", opacity: 0.75 }}>
-                            Debug mască inpaint
+                            Debug mască fotorealism
                         </summary>
                         <img
                             src={maskDebugUrl}
