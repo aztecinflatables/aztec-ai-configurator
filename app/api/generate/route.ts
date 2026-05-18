@@ -23,6 +23,7 @@ type RequestBody = {
     userPrompt?: string;
     productPreset?: string;
     productType?: string;
+    selectedUiProductType?: string;
     placementMode?: string;
     renderPipeline?: RenderPipeline;
     generateMode?: GenerateMode;
@@ -178,8 +179,6 @@ function isExplicitCharacterOrAnimal(text: string) {
         "mascot",
         "personaj",
         "character",
-        "om",
-        "human",
         "robot",
         "monstru",
         "monster",
@@ -195,94 +194,107 @@ function resolveInflatableIntent(options: {
     const rawSubject = cleanSubject(options.userPrompt || "");
     const selectedType = options.selectedProductType || "Custom";
 
-    if (containsAny(rawSubject, ["arcada", "arch", "poarta", "portal", "intrare"])) {
+    if (selectedType === "Replică food" || isExplicitFoodObject(rawSubject)) {
         return {
-            subject: rawSubject || "arcadă gonflabilă",
-            productType: "Arcadă",
+            subject: rawSubject || "replică alimentară gonflabilă",
+            productType: "Replică food",
             productPreset:
-                "Arcadă gonflabilă publicitară premium, cu două picioare verticale stabile și traversă superioară rotunjită, proporții realiste, PVC lucios, construcție fabricabilă.",
+                "Replică gonflabilă publicitară a unui produs alimentar, recognoscibilă, realizabilă în PVC lucios, cu formă simplificată și zone late imprimate pentru detalii.",
             subjectLock:
-                "The main subject is an inflatable arch / entrance structure. Do not generate a mascot, animal, face, food object or unrelated character.",
+                `The main subject is strictly this inflatable food/product replica: ${rawSubject}. It must be a freestanding advertising inflatable object, not a person, not a human, not a costume, not a wearable mascot, not a mannequin, not a masked person.`,
             negativeLock:
-                "mascot, animal, face, cat, dog, penguin, burger, food, bottle, ordinary sculpture, unrelated character",
+                "person, human, man, woman, child, body, legs, arms, head, costume, wearable costume, wearable mascot, mannequin, mask on a person, face, mascot character, cat, dog, penguin, animal, helmet, theater mask, ordinary person, unrelated object",
         };
     }
 
-    if (containsAny(rawSubject, ["tunel", "tunnel"])) {
-        return {
-            subject: rawSubject || "tunel gonflabil",
-            productType: "Tunel",
-            productPreset:
-                "Tunel gonflabil mare pentru evenimente sportive, structură lungă, intrare rotunjită, PVC lucios, stabil pe sol.",
-            subjectLock:
-                "The main subject is an inflatable tunnel. Do not generate a mascot, animal, face, food object, bottle or unrelated object.",
-            negativeLock:
-                "mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
-        };
-    }
-
-    if (containsAny(rawSubject, ["cort", "tent", "pavilion"])) {
-        return {
-            subject: rawSubject || "cort gonflabil",
-            productType: "Cort",
-            productPreset:
-                "Cort gonflabil pentru eveniment, structură tubulară gonflabilă, acoperiș moale, proporții realiste, aspect premium.",
-            subjectLock:
-                "The main subject is an inflatable event tent / pavilion. Do not generate a mascot, animal, food object, bottle, face or unrelated character.",
-            negativeLock:
-                "mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
-        };
-    }
-
-    if (containsAny(rawSubject, ["cupola", "dome"])) {
-        return {
-            subject: rawSubject || "cupolă gonflabilă",
-            productType: "Cupolă",
-            productPreset:
-                "Cupolă gonflabilă pentru eveniment, volum mare rotunjit, structură stabilă, material PVC rezistent outdoor, aspect premium.",
-            subjectLock:
-                "The main subject is an inflatable dome. Do not generate a mascot, animal, food object, bottle, face or unrelated character.",
-            negativeLock:
-                "mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
-        };
-    }
-
-    if (isExplicitProductReplica(rawSubject)) {
+    if (selectedType === "Replică produs" || isExplicitProductReplica(rawSubject)) {
         return {
             subject: rawSubject || "replică gonflabilă de produs",
             productType: "Replică produs",
             productPreset:
                 "Replică gonflabilă de produs, proporții recognoscibile, volum moale, PVC lucios, formă simplificată și fabricabilă.",
             subjectLock:
-                `The main subject is strictly this inflatable product replica: ${rawSubject}. Do not replace it with a mascot, animal, face, mask, food object or unrelated character.`,
+                `The main subject is strictly this inflatable product replica: ${rawSubject}. It must be a freestanding advertising inflatable object, not a person, not a human, not a costume, not a wearable mascot, not a mannequin, not a masked person.`,
             negativeLock:
-                "mascot, animal, face, cat, dog, penguin, mask, helmet, unrelated character, unrelated food",
+                "person, human, man, woman, child, body, legs, arms, head, costume, wearable costume, wearable mascot, mannequin, mask on a person, face, mascot character, animal, food if not requested, unrelated object",
         };
     }
 
-    if (isExplicitFoodObject(rawSubject)) {
+    if (containsAny(rawSubject, ["arcada", "arch", "poarta", "portal", "intrare"]) || selectedType === "Arcadă") {
         return {
-            subject: rawSubject || "obiect alimentar gonflabil",
-            productType: "Replică food",
+            subject: rawSubject || "arcadă gonflabilă",
+            productType: "Arcadă",
             productPreset:
-                "Replică gonflabilă publicitară a unui produs alimentar, recognoscibilă, realizabilă în PVC lucios, cu formă simplificată și zone late imprimate pentru detalii.",
+                "Arcadă gonflabilă publicitară premium, cu două picioare verticale stabile și traversă superioară rotunjită, proporții realiste, PVC lucios, construcție fabricabilă.",
             subjectLock:
-                `The main subject is strictly this inflatable food/product replica: ${rawSubject}. Do not generate a mascot, animal, face, mask, helmet, cat, dog, penguin or unrelated character.`,
+                "The main subject is an inflatable arch / entrance structure. It must not be a mascot, animal, person, human, costume, face, food object or unrelated character.",
             negativeLock:
-                "mascot, animal, face, cat, dog, penguin, mask, helmet, character, ordinary mascot, person, unrelated object",
+                "person, human, man, woman, child, body, legs, arms, head, costume, wearable mascot, mascot, animal, face, cat, dog, penguin, burger, food, bottle, ordinary sculpture, unrelated character",
         };
     }
 
-    if (isExplicitCharacterOrAnimal(rawSubject)) {
+    if (containsAny(rawSubject, ["tunel", "tunnel"]) || selectedType === "Tunel") {
+        return {
+            subject: rawSubject || "tunel gonflabil",
+            productType: "Tunel",
+            productPreset:
+                "Tunel gonflabil mare pentru evenimente sportive, structură lungă, intrare rotunjită, PVC lucios, stabil pe sol.",
+            subjectLock:
+                "The main subject is an inflatable tunnel. It must not be a mascot, animal, person, human, costume, food object, bottle or unrelated object.",
+            negativeLock:
+                "person, human, man, woman, child, costume, wearable mascot, mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
+        };
+    }
+
+    if (containsAny(rawSubject, ["cort", "tent", "pavilion"]) || selectedType === "Cort") {
+        return {
+            subject: rawSubject || "cort gonflabil",
+            productType: "Cort",
+            productPreset:
+                "Cort gonflabil pentru eveniment, structură tubulară gonflabilă, acoperiș moale, proporții realiste, aspect premium.",
+            subjectLock:
+                "The main subject is an inflatable event tent / pavilion. It must not be a mascot, animal, person, human, costume, food object, bottle, face or unrelated character.",
+            negativeLock:
+                "person, human, man, woman, child, costume, wearable mascot, mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
+        };
+    }
+
+    if (containsAny(rawSubject, ["cupola", "dome"]) || selectedType === "Cupolă") {
+        return {
+            subject: rawSubject || "cupolă gonflabilă",
+            productType: "Cupolă",
+            productPreset:
+                "Cupolă gonflabilă pentru eveniment, volum mare rotunjit, structură stabilă, material PVC rezistent outdoor, aspect premium.",
+            subjectLock:
+                "The main subject is an inflatable dome. It must not be a mascot, animal, person, human, costume, food object, bottle, face or unrelated character.",
+            negativeLock:
+                "person, human, man, woman, child, costume, wearable mascot, mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
+        };
+    }
+
+    if (selectedType === "Sticlă") {
+        return {
+            subject: rawSubject || "sticlă gonflabilă",
+            productType: "Sticlă",
+            productPreset:
+                "Replică gonflabilă de produs în formă de sticlă, proporții recognoscibile, volum moale, PVC lucios, fabricabilă.",
+            subjectLock:
+                "The main subject is an inflatable bottle / product replica. It must not be a mascot, animal, person, human, costume, face, mask or unrelated object.",
+            negativeLock:
+                "person, human, man, woman, child, body, legs, arms, head, costume, wearable mascot, mascot, animal, food, arch, tunnel, face, mask, unrelated object",
+        };
+    }
+
+    if (selectedType === "Mascotă" || isExplicitCharacterOrAnimal(rawSubject)) {
         return {
             subject: rawSubject || "mascotă gonflabilă",
             productType: "Mascotă",
             productPreset:
                 `Mascotă gonflabilă mare reprezentând clar subiectul cerut: ${rawSubject}. Volum rotunjit, expresiv, stabil, realizabil în PVC gonflabil, formă simplificată dar recognoscibilă.`,
             subjectLock:
-                `The main subject is strictly this inflatable mascot / character: ${rawSubject}. Do not replace it with a different animal, food object, arch, tunnel, bottle, mask or unrelated object.`,
+                `The main subject is strictly this inflatable mascot / character: ${rawSubject}. It must be a standalone inflatable object, not a human wearing a costume and not a real person.`,
             negativeLock:
-                "wrong animal, wrong character, burger, food, bottle, arch, tunnel, tent, dome, unrelated object, theater mask, helmet",
+                "real person, human, man, woman, child, body wearing costume, wearable costume, mannequin, wrong animal, wrong character, burger, food, bottle, arch, tunnel, tent, dome, unrelated object, theater mask, helmet",
         };
     }
 
@@ -295,85 +307,7 @@ function resolveInflatableIntent(options: {
             subjectLock:
                 `The main subject is strictly the written user request: ${rawSubject}. The selected UI category is secondary. Do not replace it with another object type.`,
             negativeLock:
-                "wrong subject, unrelated object, mascot if not requested, animal if not requested, food if not requested, arch if not requested, bottle if not requested",
-        };
-    }
-
-    if (selectedType === "Arcadă") {
-        return {
-            subject: "arcadă gonflabilă",
-            productType: "Arcadă",
-            productPreset:
-                "Arcadă gonflabilă publicitară premium, cu două picioare verticale stabile și traversă superioară rotunjită, proporții realiste, PVC lucios, construcție fabricabilă.",
-            subjectLock:
-                "The main subject is an inflatable arch. Do not generate another object type.",
-            negativeLock:
-                "mascot, animal, food, bottle, face, mask, unrelated object",
-        };
-    }
-
-    if (selectedType === "Mascotă") {
-        return {
-            subject: "mascotă gonflabilă",
-            productType: "Mascotă",
-            productPreset:
-                "Mascotă gonflabilă mare, volum rotunjit, expresivă, stabilă, realizabilă în PVC gonflabil, formă simplificată dar recognoscibilă.",
-            subjectLock:
-                "The main subject is an inflatable mascot. Do not generate an arch, tunnel, bottle or unrelated object.",
-            negativeLock:
-                "arch, tunnel, bottle, tent, dome, unrelated object",
-        };
-    }
-
-    if (selectedType === "Cupolă") {
-        return {
-            subject: "cupolă gonflabilă",
-            productType: "Cupolă",
-            productPreset:
-                "Cupolă gonflabilă pentru eveniment, volum mare rotunjit, structură stabilă, material PVC rezistent outdoor, aspect premium.",
-            subjectLock:
-                "The main subject is an inflatable dome. Do not generate another object type.",
-            negativeLock:
-                "mascot, animal, food, bottle, face, mask, unrelated object",
-        };
-    }
-
-    if (selectedType === "Cort") {
-        return {
-            subject: "cort gonflabil",
-            productType: "Cort",
-            productPreset:
-                "Cort gonflabil pentru eveniment, structură tubulară gonflabilă, acoperiș moale, proporții realiste, aspect premium.",
-            subjectLock:
-                "The main subject is an inflatable event tent. Do not generate another object type.",
-            negativeLock:
-                "mascot, animal, food, bottle, face, mask, unrelated object",
-        };
-    }
-
-    if (selectedType === "Tunel") {
-        return {
-            subject: "tunel gonflabil",
-            productType: "Tunel",
-            productPreset:
-                "Tunel gonflabil mare pentru evenimente sportive, structură lungă, intrare rotunjită, PVC lucios, stabil pe sol.",
-            subjectLock:
-                "The main subject is an inflatable tunnel. Do not generate another object type.",
-            negativeLock:
-                "mascot, animal, food, bottle, face, mask, unrelated object",
-        };
-    }
-
-    if (selectedType === "Sticlă") {
-        return {
-            subject: "sticlă gonflabilă",
-            productType: "Sticlă",
-            productPreset:
-                "Replică gonflabilă de produs în formă de sticlă, proporții recognoscibile, volum moale, PVC lucios, fabricabilă.",
-            subjectLock:
-                "The main subject is an inflatable bottle / product replica. Do not generate another object type.",
-            negativeLock:
-                "mascot, animal, food, arch, tunnel, face, mask, unrelated object",
+                "person, human, man, woman, child, costume, wearable mascot, wrong subject, unrelated object, mascot if not requested, animal if not requested, food if not requested, arch if not requested, bottle if not requested",
         };
     }
 
@@ -386,7 +320,7 @@ function resolveInflatableIntent(options: {
         subjectLock:
             "The generated object must follow the written user request. The UI category is only secondary.",
         negativeLock:
-            "wrong subject, unrelated object, random mascot, random animal, random face, random mask",
+            "person, human, man, woman, child, costume, wearable mascot, wrong subject, unrelated object, random mascot, random animal, random face, random mask",
     };
 }
 
@@ -435,6 +369,15 @@ function getProductTypePrompt(
     const lowDetail = shapeDetail <= 15;
     const mediumDetail = shapeDetail <= 45;
 
+    const noHumanRule =
+        productType === "Replică food" ||
+        productType === "Replică produs" ||
+        productType === "Arcadă" ||
+        productType === "Tunel" ||
+        productType === "Cort" ||
+        productType === "Cupolă" ||
+        productType === "Sticlă";
+
     if (pipeline === "inpaint") {
         return `
 PRODUCT TYPE:
@@ -455,6 +398,7 @@ Mandatory result:
 - match the camera perspective and lighting of the original photo;
 - use PVC inflatable construction, rounded air-filled volumes and fabricable forms;
 - do not replace the requested subject with a different category;
+${noHumanRule ? "- ABSOLUTELY NO human, no person, no mannequin, no costume, no wearable mascot, no body, no legs, no arms, no face;" : ""}
 ${lowDetail ? "- low detail means simplified but still recognizable, not abstract and not a wrong object;" : ""}
 ${mediumDetail ? "- avoid micro-details, tiny geometry and over-complex surfaces;" : "- allow more recognizable details, but keep everything fabricable as a PVC inflatable;"}
 `.trim();
@@ -479,6 +423,7 @@ Mandatory result:
 - rounded air-filled volumes;
 - fabricable commercial inflatable form;
 - do not replace the requested subject with a different object;
+${noHumanRule ? "- ABSOLUTELY NO human, no person, no mannequin, no costume, no wearable mascot, no body, no legs, no arms, no face;" : ""}
 ${lowDetail ? "- low detail means simplified but still recognizable, not abstract and not a wrong object;" : ""}
 `.trim();
 }
@@ -975,10 +920,29 @@ function getNegativePrompt(options: {
 
     let negative = `
 ${intent.negativeLock},
-wrong subject,
-unrelated object,
+person,
+human,
+man,
+woman,
+child,
+people,
+body,
+legs,
+arms,
+head,
+face,
+mask,
+helmet,
+costume,
+wearable costume,
+wearable mascot,
+mannequin,
+dummy,
+statue of person,
 extra people,
 extra vehicles,
+wrong subject,
+unrelated object,
 watermark,
 random text,
 misspelled text,
@@ -1289,6 +1253,7 @@ export async function POST(req: Request) {
             userPrompt = "",
             productPreset = "",
             productType = "Custom",
+            selectedUiProductType = "",
             placementMode = "Pe sol",
             renderPipeline,
             generateMode = "photo",
@@ -1405,12 +1370,16 @@ ${intent.subjectLock}
 CLEAN USER REQUEST:
 ${intent.subject}
 
-UI SELECTED TYPE, SECONDARY ONLY:
+AUTO RESOLVED PRODUCT TYPE:
 ${productType}
 
+ORIGINAL UI SELECTED TYPE, IGNORE IF CONFLICTS:
+${selectedUiProductType}
+
 RULE:
-The written user request is the primary source of truth.
-The selected UI type is secondary and must not override a clear subject in the text.
+The written user request and AUTO RESOLVED PRODUCT TYPE are the primary source of truth.
+The original selected UI type is secondary and must not override a clear subject in the text.
+For food/product/architecture objects, never generate a human, person, costume, wearable mascot or mannequin.
 
 ${getProductTypePrompt(intent, shapeDetailValue, pipeline)}
 
@@ -1464,6 +1433,11 @@ ${
 - match lighting and exposure of the original photograph;
 - no extra people;
 - no extra vehicles;
+- no human;
+- no person;
+- no costume;
+- no wearable mascot;
+- no mannequin;
 - no changed building geometry outside mask;
 - do not change the requested subject.
 `
@@ -1481,6 +1455,10 @@ ${
 - no street;
 - no sky;
 - no people;
+- no human;
+- no person;
+- no costume;
+- no wearable mascot;
 - no props;
 - clean edges suitable for compositing over a photo;
 - do not change the requested subject.
@@ -1515,6 +1493,7 @@ ${
                 debug: {
                     pipeline,
                     originalProductType: productType,
+                    selectedUiProductType,
                     resolvedProductType: intent.productType,
                     resolvedSubject: intent.subject,
                     userPrompt,
@@ -1551,6 +1530,7 @@ ${
             debug: {
                 pipeline,
                 originalProductType: productType,
+                selectedUiProductType,
                 resolvedProductType: intent.productType,
                 resolvedSubject: intent.subject,
                 userPrompt,
