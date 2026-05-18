@@ -12,6 +12,7 @@ type ResolvedIntent = {
     productPreset: string;
     subjectLock: string;
     negativeLock: string;
+    subjectSpecificLock: string;
 };
 
 type RequestBody = {
@@ -110,6 +111,18 @@ function cleanSubject(value: string) {
         .trim();
 }
 
+function isBurgerSubject(text: string) {
+    return containsAny(text, ["burger", "hamburger", "cheeseburger"]);
+}
+
+function isPizzaSubject(text: string) {
+    return containsAny(text, ["pizza"]);
+}
+
+function isHotdogSubject(text: string) {
+    return containsAny(text, ["hotdog", "hot dog"]);
+}
+
 function isExplicitProductReplica(text: string) {
     return containsAny(text, [
         "sticla",
@@ -132,10 +145,13 @@ function isExplicitFoodObject(text: string) {
     return containsAny(text, [
         "burger",
         "hamburger",
+        "cheeseburger",
         "sandwich",
         "hotdog",
+        "hot dog",
         "pizza",
         "cartof",
+        "cartofi",
         "inghetata",
         "ice cream",
         "shaorma",
@@ -186,6 +202,64 @@ function isExplicitCharacterOrAnimal(text: string) {
     ]);
 }
 
+function getSubjectSpecificLock(subject: string, productType: string) {
+    if (isBurgerSubject(subject)) {
+        return `
+SUBJECT-SPECIFIC LOCK:
+The object must be unmistakably a SINGLE hamburger / cheeseburger inflatable replica.
+Required visible parts:
+- one rounded top bun;
+- one rounded bottom bun;
+- sesame seed print on the top bun;
+- visible lettuce band;
+- visible cheese slice band;
+- visible burger patty band;
+- optional tomato band;
+- all details are printed or broad inflated PVC panels on ONE object;
+- silhouette must read as a hamburger from distance;
+- do not generate an abstract hook, number, letter, tube, arch, mascot, animal, person or generic inflatable.
+`.trim();
+    }
+
+    if (isPizzaSubject(subject)) {
+        return `
+SUBJECT-SPECIFIC LOCK:
+The object must be unmistakably a SINGLE pizza inflatable replica.
+Required visible parts:
+- round or triangular pizza shape;
+- crust border;
+- cheese surface;
+- visible topping print;
+- all details printed or broad inflated PVC panels;
+- do not generate a person, mascot, abstract tube or generic inflatable.
+`.trim();
+    }
+
+    if (isHotdogSubject(subject)) {
+        return `
+SUBJECT-SPECIFIC LOCK:
+The object must be unmistakably a SINGLE hot dog inflatable replica.
+Required visible parts:
+- long bun form;
+- sausage in the middle;
+- ketchup or mustard print;
+- rounded inflated PVC construction;
+- do not generate a person, mascot, abstract tube or generic inflatable.
+`.trim();
+    }
+
+    if (productType === "Replică food") {
+        return `
+SUBJECT-SPECIFIC LOCK:
+The object must be unmistakably the requested food item as ONE commercial inflatable replica.
+Use clear food-specific silhouette and broad printable details.
+Do not generate a generic tube, hook, arch, mascot, person or abstract inflatable.
+`.trim();
+    }
+
+    return "";
+}
+
 function resolveInflatableIntent(options: {
     userPrompt: string;
     selectedProductType: string;
@@ -203,7 +277,8 @@ function resolveInflatableIntent(options: {
             subjectLock:
                 `The main subject is strictly this inflatable food/product replica: ${rawSubject}. It must be a freestanding advertising inflatable object, not a person, not a human, not a costume, not a wearable mascot, not a mannequin, not a masked person.`,
             negativeLock:
-                "person, human, man, woman, child, body, legs, arms, head, costume, wearable costume, wearable mascot, mannequin, mask on a person, face, mascot character, cat, dog, penguin, animal, helmet, theater mask, ordinary person, unrelated object",
+                "person, human, man, woman, child, body, legs, arms, head, costume, wearable costume, wearable mascot, mannequin, mask on a person, face, mascot character, cat, dog, penguin, animal, helmet, theater mask, ordinary person, unrelated object, generic tube, abstract hook, number shape, letter shape",
+            subjectSpecificLock: getSubjectSpecificLock(rawSubject, "Replică food"),
         };
     }
 
@@ -216,7 +291,8 @@ function resolveInflatableIntent(options: {
             subjectLock:
                 `The main subject is strictly this inflatable product replica: ${rawSubject}. It must be a freestanding advertising inflatable object, not a person, not a human, not a costume, not a wearable mascot, not a mannequin, not a masked person.`,
             negativeLock:
-                "person, human, man, woman, child, body, legs, arms, head, costume, wearable costume, wearable mascot, mannequin, mask on a person, face, mascot character, animal, food if not requested, unrelated object",
+                "person, human, man, woman, child, body, legs, arms, head, costume, wearable costume, wearable mascot, mannequin, mask on a person, face, mascot character, animal, food if not requested, unrelated object, generic tube, abstract hook",
+            subjectSpecificLock: "",
         };
     }
 
@@ -233,6 +309,7 @@ function resolveInflatableIntent(options: {
                 "The main subject is an inflatable arch / entrance structure. It must not be a mascot, animal, person, human, costume, face, food object or unrelated character.",
             negativeLock:
                 "person, human, man, woman, child, body, legs, arms, head, costume, wearable mascot, mascot, animal, face, cat, dog, penguin, burger, food, bottle, ordinary sculpture, unrelated character",
+            subjectSpecificLock: "",
         };
     }
 
@@ -246,6 +323,7 @@ function resolveInflatableIntent(options: {
                 "The main subject is an inflatable tunnel. It must not be a mascot, animal, person, human, costume, food object, bottle or unrelated object.",
             negativeLock:
                 "person, human, man, woman, child, costume, wearable mascot, mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
+            subjectSpecificLock: "",
         };
     }
 
@@ -259,6 +337,7 @@ function resolveInflatableIntent(options: {
                 "The main subject is an inflatable event tent / pavilion. It must not be a mascot, animal, person, human, costume, food object, bottle, face or unrelated character.",
             negativeLock:
                 "person, human, man, woman, child, costume, wearable mascot, mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
+            subjectSpecificLock: "",
         };
     }
 
@@ -272,6 +351,7 @@ function resolveInflatableIntent(options: {
                 "The main subject is an inflatable dome. It must not be a mascot, animal, person, human, costume, food object, bottle, face or unrelated character.",
             negativeLock:
                 "person, human, man, woman, child, costume, wearable mascot, mascot, animal, face, cat, dog, penguin, burger, food, bottle, unrelated character",
+            subjectSpecificLock: "",
         };
     }
 
@@ -285,6 +365,7 @@ function resolveInflatableIntent(options: {
                 "The main subject is an inflatable bottle / product replica. It must not be a mascot, animal, person, human, costume, face, mask or unrelated object.",
             negativeLock:
                 "person, human, man, woman, child, body, legs, arms, head, costume, wearable mascot, mascot, animal, food, arch, tunnel, face, mask, unrelated object",
+            subjectSpecificLock: "",
         };
     }
 
@@ -298,6 +379,7 @@ function resolveInflatableIntent(options: {
                 `The main subject is strictly this inflatable mascot / character: ${rawSubject}. It must be a standalone inflatable object, not a human wearing a costume and not a real person.`,
             negativeLock:
                 "real person, human, man, woman, child, body wearing costume, wearable costume, mannequin, wrong animal, wrong character, burger, food, bottle, arch, tunnel, tent, dome, unrelated object, theater mask, helmet",
+            subjectSpecificLock: "",
         };
     }
 
@@ -311,6 +393,7 @@ function resolveInflatableIntent(options: {
                 `The main subject is strictly the written user request: ${rawSubject}. The selected UI category is secondary. Do not replace it with another object type.`,
             negativeLock:
                 "person, human, man, woman, child, costume, wearable mascot, wrong subject, unrelated object, mascot if not requested, animal if not requested, food if not requested, arch if not requested, bottle if not requested",
+            subjectSpecificLock: "",
         };
     }
 
@@ -324,7 +407,16 @@ function resolveInflatableIntent(options: {
             "The generated object must follow the written user request. The UI category is only secondary.",
         negativeLock:
             "person, human, man, woman, child, costume, wearable mascot, wrong subject, unrelated object, random mascot, random animal, random face, random mask",
+        subjectSpecificLock: "",
     };
+}
+
+function shouldIgnoreReferenceForSubject(intent: ResolvedIntent, respectReference: number) {
+    if (intent.productType === "Replică food" && isExplicitFoodObject(intent.subject)) {
+        return respectReference < 98;
+    }
+
+    return false;
 }
 
 function shouldUseReferenceAsInitImage(options: {
@@ -334,6 +426,7 @@ function shouldUseReferenceAsInitImage(options: {
     productType?: string;
     userPrompt?: string;
     shapeDetail: number;
+    ignoreReference: boolean;
 }) {
     const {
         refImage,
@@ -342,20 +435,22 @@ function shouldUseReferenceAsInitImage(options: {
         productType,
         userPrompt,
         shapeDetail,
+        ignoreReference,
     } = options;
 
     if (!refImage) return false;
+    if (ignoreReference) return false;
 
     const combined = `${productType || ""} ${userPrompt || ""}`;
 
     if (shapeDetail <= 50) return false;
-    if (isExplicitFoodObject(combined) && respectReference < 97) return false;
+    if (isExplicitFoodObject(combined) && respectReference < 98) return false;
 
-    if (generateMode === "replica" && respectReference >= 90 && shapeDetail >= 65) {
+    if (generateMode === "replica" && respectReference >= 92 && shapeDetail >= 65) {
         return true;
     }
 
-    if (respectReference >= 95 && shapeDetail >= 80) {
+    if (respectReference >= 97 && shapeDetail >= 80) {
         return true;
     }
 
@@ -392,6 +487,8 @@ ${subject}
 STRICT SUBJECT RULE:
 ${intent.subjectLock}
 
+${intent.subjectSpecificLock}
+
 Mandatory result:
 - create a commercial inflatable object representing the subject above;
 - keep the object inside the white masked area;
@@ -417,8 +514,12 @@ ${subject}
 STRICT SUBJECT RULE:
 ${intent.subjectLock}
 
+${intent.subjectSpecificLock}
+
 Mandatory result:
 - generate exactly ONE single inflatable object, centered, isolated;
+- the object must clearly represent the written subject: ${subject};
+- never generate an unrelated generic inflatable shape;
 - never generate multiple copies;
 - never generate repeated objects;
 - never generate a repeated pattern;
@@ -481,7 +582,7 @@ Rules:
 GENERATION MODE: CONTROLLED INFLATABLE REPLICA OVERLAY.
 
 Rules:
-- preserve the requested subject;
+- preserve the requested written subject first;
 - convert the result into a real commercial inflatable object;
 - output exactly ONE object only;
 - the object must be centered and isolated;
@@ -506,6 +607,7 @@ GENERATION MODE: PHOTOREALISTIC SINGLE INFLATABLE PRODUCT OVERLAY.
 Rules:
 - output must contain exactly ONE object only;
 - one standalone object, centered, isolated;
+- the object must clearly match the written user subject;
 - no repeated elements;
 - no product pattern;
 - no tiled image;
@@ -553,6 +655,8 @@ function getReferencePrompt(options: {
     usingRefAsInitImage: boolean;
     shapeDetail: number;
     pipeline: RenderPipeline;
+    ignoreReference: boolean;
+    intent: ResolvedIntent;
 }) {
     const {
         respectReference,
@@ -565,30 +669,47 @@ function getReferencePrompt(options: {
         usingRefAsInitImage,
         shapeDetail,
         pipeline,
+        ignoreReference,
+        intent,
     } = options;
 
     let prompt = `
 REFERENCE CONTROL:
 Reference strength: ${respectReference}/100.
 Reference direct image-to-image: ${usingRefAsInitImage ? "ON" : "OFF"}.
+Reference ignored due to clear written subject: ${ignoreReference ? "YES" : "NO"}.
 Shape detail level: ${shapeDetail}/100.
 Pipeline: ${pipeline}.
 `.trim();
+
+    if (ignoreReference) {
+        prompt += `
+
+A reference image may have been uploaded, but it is intentionally ignored because the written subject is clear:
+${intent.subject}
+
+Primary instruction:
+Generate the written subject, not the uploaded reference.
+Do not borrow the reference object's shape if it conflicts with the written subject.`;
+
+        return prompt.trim();
+    }
 
     if (hasRefImage) {
         prompt += `
 
 A product reference image was uploaded.
-Use it as product design reference only.`;
+Use it as product design reference only.
+The written subject remains primary.`;
 
         if (respectShape) {
             prompt += `
-- preserve the recognizable subject identity and silhouette logic from the reference;`;
+- preserve the recognizable subject identity and silhouette logic from the reference only if it matches the written subject;`;
         }
 
         if (respectProportions) {
             prompt += `
-- preserve approximate proportions from the reference;`;
+- preserve approximate proportions from the reference only if they match the written subject;`;
         }
 
         if (respectTexture) {
@@ -623,7 +744,7 @@ Use it as product design reference only.`;
     } else {
         prompt += `
 
-No product reference image was uploaded.
+No usable product reference image is used.
 Generate from the written request and resolved product intent.
 Do not create a repeated product pattern or multiple product copies.`;
     }
@@ -818,7 +939,7 @@ DETAILED INFLATABLE.
 For subject "${subject}":
 - preserve important subject details;
 - use PVC seams and realistic printed texture;
-- avoid edible, rigid or sculpture-like appearance unless specifically requested;
+- avoid rigid or sculpture-like appearance unless specifically requested;
 - integrate perspective and contact shadows.
 `.trim();
         }
@@ -840,8 +961,8 @@ LOW DETAIL SINGLE OVERLAY.
 
 For subject "${subject}":
 - exactly one object only;
-- simplified but recognizable;
-- one to three large rounded inflatable volumes;
+- simplified but still clearly recognizable as the written subject;
+- one to four large rounded inflatable volumes;
 - no tiny details;
 - no repeated copies;
 - no pattern;
@@ -982,6 +1103,18 @@ function getNegativePrompt(options: {
 
     let negative = `
 ${intent.negativeLock},
+generic inflatable,
+generic tube,
+abstract inflatable,
+abstract hook,
+number shape,
+letter shape,
+question mark shape,
+blue tube,
+yellow ball,
+unrelated inflatable shape,
+wrong food,
+wrong product,
 multiple objects,
 multiple copies,
 repeated object,
@@ -1062,6 +1195,28 @@ floating object,
 object not touching surface,
 no contact shadow
 `.trim();
+
+    if (isBurgerSubject(intent.subject)) {
+        negative += `,
+not a burger,
+not a hamburger,
+not a cheeseburger,
+missing bun,
+missing top bun,
+missing bottom bun,
+missing patty,
+missing lettuce,
+missing cheese,
+missing hamburger layers,
+abstract food,
+single tube,
+hook shape,
+letter shaped object,
+number shaped object,
+animal,
+mascot,
+face`;
+    }
 
     if (pipeline === "overlay") {
         negative += `,
@@ -1219,9 +1374,9 @@ async function generateOverlayImage(options: {
         formData.append("mode", "image-to-image");
 
         const strength =
-            respectReference >= 96 && shapeDetailValue >= 75
-                ? "0.26"
-                : respectReference >= 90 && shapeDetailValue >= 60
+            respectReference >= 98 && shapeDetailValue >= 75
+                ? "0.24"
+                : respectReference >= 92 && shapeDetailValue >= 60
                   ? "0.32"
                   : "0.42";
 
@@ -1414,6 +1569,8 @@ export async function POST(req: Request) {
         const respectBranding = referenceControl?.respectBranding ?? true;
         const shapeDetailValue = clamp(Number(shapeDetail), 0, 100);
 
+        const ignoreReference = shouldIgnoreReferenceForSubject(intent, respectReference);
+
         const usingRefAsInitImage =
             pipeline === "overlay" &&
             shouldUseReferenceAsInitImage({
@@ -1423,11 +1580,13 @@ export async function POST(req: Request) {
                 productType: intent.productType,
                 userPrompt: intent.subject,
                 shapeDetail: shapeDetailValue,
+                ignoreReference,
             });
 
-        const geminiAnalysis = refImage
-            ? await analyzeReferenceWithGemini(refImage, googleKey)
-            : null;
+        const geminiAnalysis =
+            refImage && !ignoreReference
+                ? await analyzeReferenceWithGemini(refImage, googleKey)
+                : null;
 
         const geminiPrompt = geminiAnalysis
             ? `
@@ -1439,6 +1598,7 @@ Proportions: ${geminiAnalysis.proportions}
 Inflatable conversion: ${geminiAnalysis.inflatable_conversion}
 
 Important:
+Use this analysis only if it matches the written subject.
 Use this analysis only to build ONE standalone inflatable object.
 Do not create a collage, product pattern, tiled image or multiple versions.
 `
@@ -1461,6 +1621,7 @@ Generate ONLY a transparent PNG overlay of ONE commercial inflatable object.
 DO NOT generate any background.
 DO NOT generate a rectangle, poster, flat product sheet, collage, pattern or tiled image.
 DO NOT generate multiple copies.
+DO NOT generate a generic tube or abstract inflatable.
 DO NOT use or modify the uploaded scene photo.
 The background photo is handled only by the frontend and must remain unchanged.
 `;
@@ -1476,6 +1637,8 @@ Preset: ${intent.productPreset}
 STRICT SUBJECT LOCK:
 ${intent.subjectLock}
 
+${intent.subjectSpecificLock}
+
 CLEAN USER REQUEST:
 ${intent.subject}
 
@@ -1490,6 +1653,8 @@ The written user request and AUTO RESOLVED PRODUCT TYPE are the primary source o
 The original selected UI type is secondary and must not override a clear subject in the text.
 For food/product/architecture objects, never generate a human, person, costume, wearable mascot or mannequin.
 For overlay generation, always generate exactly ONE single isolated object only.
+If the uploaded reference conflicts with the written subject, ignore the reference and obey the written subject.
+Reference ignored this request: ${ignoreReference ? "YES" : "NO"}.
 
 ${getProductTypePrompt(intent, shapeDetailValue, pipeline)}
 
@@ -1508,6 +1673,8 @@ ${getReferencePrompt({
     usingRefAsInitImage,
     shapeDetail: shapeDetailValue,
     pipeline,
+    ignoreReference,
+    intent,
 })}
 
 ${geminiPrompt}
@@ -1566,6 +1733,8 @@ ${
 - no multiple objects;
 - no many burgers;
 - no food pile;
+- no generic tube;
+- no abstract inflatable;
 - complete object, not cropped;
 - PVC air-filled appearance;
 - soft rounded inflated edges;
@@ -1622,6 +1791,7 @@ ${
                     selectedUiProductType,
                     resolvedProductType: intent.productType,
                     resolvedSubject: intent.subject,
+                    ignoreReference,
                     userPrompt,
                     prompt,
                     placementMode,
@@ -1640,7 +1810,7 @@ ${
 
         const overlayResult = await generateOverlayImage({
             stabilityKey,
-            refImage,
+            refImage: ignoreReference ? null : refImage,
             finalPrompt,
             negativePrompt,
             usingRefAsInitImage,
@@ -1659,6 +1829,7 @@ ${
                 selectedUiProductType,
                 resolvedProductType: intent.productType,
                 resolvedSubject: intent.subject,
+                ignoreReference,
                 userPrompt,
                 prompt,
                 placementMode,
