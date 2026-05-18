@@ -20,6 +20,8 @@ type ProductType =
     | "Sticlă"
     | "Custom";
 
+type ApiProductType = ProductType | "Replică food" | "Replică produs";
+
 type PlacementMode =
     | "Pe sol"
     | "Pe acoperiș"
@@ -27,7 +29,7 @@ type PlacementMode =
     | "Suspendat"
     | "În interior";
 
-const PRODUCT_PRESETS: Record<ProductType, string> = {
+const PRODUCT_PRESETS: Record<ApiProductType, string> = {
     Arcadă:
         "Arcadă gonflabilă publicitară premium, cu două picioare verticale stabile și traversă superioară rotunjită, proporții realiste, PVC lucios, construcție fabricabilă.",
     Mascotă:
@@ -42,6 +44,10 @@ const PRODUCT_PRESETS: Record<ProductType, string> = {
         "Replică gonflabilă de produs în formă de sticlă, proporții recognoscibile, volum moale, PVC lucios, fabricabilă.",
     Custom:
         "Obiect gonflabil personalizat, realist, fabricabil, cu formă stabilă, material PVC profesional și proporții comerciale.",
+    "Replică food":
+        "Replică gonflabilă publicitară a unui produs alimentar, recognoscibilă, realizabilă în PVC lucios, cu formă simplificată, volume rotunjite și zone late imprimate pentru detalii. Nu este mascotă, nu este costum, nu este om.",
+    "Replică produs":
+        "Replică gonflabilă de produs, proporții recognoscibile, volum moale, PVC lucios, formă simplificată și fabricabilă. Nu este mascotă, nu este costum, nu este om.",
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -62,6 +68,11 @@ function normalizeText(value: string) {
         .replace(/ţ/g, "t");
 }
 
+function containsAny(text: string, terms: string[]) {
+    const t = normalizeText(text);
+    return terms.some((term) => t.includes(normalizeText(term)));
+}
+
 function cleanUserPrompt(value: string) {
     return value
         .replace(/pe acoperiș/gi, "")
@@ -80,13 +91,126 @@ function cleanUserPrompt(value: string) {
         .trim();
 }
 
-function getDerivedDimensions(productType: ProductType, heightM: number) {
+function resolveClientProductType(userPrompt: string, selectedType: ProductType): ApiProductType {
+    const prompt = normalizeText(userPrompt);
+
+    if (
+        containsAny(prompt, [
+            "arcada",
+            "arch",
+            "poarta",
+            "portal",
+            "intrare",
+        ])
+    ) {
+        return "Arcadă";
+    }
+
+    if (containsAny(prompt, ["tunel", "tunnel"])) {
+        return "Tunel";
+    }
+
+    if (containsAny(prompt, ["cort", "tent", "pavilion"])) {
+        return "Cort";
+    }
+
+    if (containsAny(prompt, ["cupola", "dome"])) {
+        return "Cupolă";
+    }
+
+    if (
+        containsAny(prompt, [
+            "sticla",
+            "bottle",
+            "doza",
+            "can",
+            "cutie",
+            "box",
+            "produs",
+            "ambalaj",
+            "pahar",
+            "cup",
+            "flacon",
+            "recipient",
+        ])
+    ) {
+        return "Replică produs";
+    }
+
+    if (
+        containsAny(prompt, [
+            "burger",
+            "hamburger",
+            "sandwich",
+            "hotdog",
+            "pizza",
+            "cartof",
+            "inghetata",
+            "ice cream",
+            "shaorma",
+            "kebab",
+            "gogoasa",
+            "donut",
+            "cafea",
+            "coffee",
+            "mancare",
+            "food",
+            "fruct",
+            "mar",
+            "banana",
+            "capsuna",
+        ])
+    ) {
+        return "Replică food";
+    }
+
+    if (
+        containsAny(prompt, [
+            "pinguin",
+            "penguin",
+            "catel",
+            "caine",
+            "dog",
+            "pisica",
+            "cat",
+            "urs",
+            "bear",
+            "iepure",
+            "rabbit",
+            "leu",
+            "lion",
+            "tigru",
+            "tiger",
+            "elefant",
+            "elephant",
+            "dinozaur",
+            "dinosaur",
+            "dragon",
+            "mascota",
+            "mascot",
+            "personaj",
+            "character",
+            "robot",
+            "monstru",
+            "monster",
+            "animal",
+        ])
+    ) {
+        return "Mascotă";
+    }
+
+    return selectedType;
+}
+
+function getDerivedDimensions(productType: ApiProductType, heightM: number) {
     if (productType === "Arcadă") return { widthM: heightM * 1.25, depthM: heightM * 0.25 };
     if (productType === "Mascotă") return { widthM: heightM * 0.9, depthM: heightM * 0.55 };
     if (productType === "Cupolă") return { widthM: heightM * 1.8, depthM: heightM * 1.8 };
     if (productType === "Cort") return { widthM: heightM * 1.5, depthM: heightM * 1.5 };
     if (productType === "Tunel") return { widthM: heightM * 1.1, depthM: heightM * 2.2 };
     if (productType === "Sticlă") return { widthM: heightM * 0.35, depthM: heightM * 0.35 };
+    if (productType === "Replică produs") return { widthM: heightM * 0.75, depthM: heightM * 0.45 };
+    if (productType === "Replică food") return { widthM: heightM * 1.25, depthM: heightM * 0.7 };
     return { widthM: heightM, depthM: heightM * 0.5 };
 }
 
@@ -153,11 +277,12 @@ function roundedRectPath(
     ctx.closePath();
 }
 
-function getInpaintWorkAreaAspect(productType: ProductType, prompt: string, shapeDetail: number) {
+function getInpaintWorkAreaAspect(productType: ApiProductType, prompt: string, shapeDetail: number) {
     const text = normalizeText(prompt);
     const detail = clamp(shapeDetail / 100, 0, 1);
 
     if (
+        productType === "Replică food" ||
         text.includes("burger") ||
         text.includes("hamburger") ||
         text.includes("pizza") ||
@@ -173,19 +298,7 @@ function getInpaintWorkAreaAspect(productType: ProductType, prompt: string, shap
         };
     }
 
-    if (
-        text.includes("pinguin") ||
-        text.includes("penguin") ||
-        text.includes("catel") ||
-        text.includes("caine") ||
-        text.includes("dog") ||
-        text.includes("pisica") ||
-        text.includes("cat") ||
-        text.includes("urs") ||
-        text.includes("bear") ||
-        text.includes("mascota") ||
-        text.includes("animal")
-    ) {
+    if (productType === "Mascotă") {
         return {
             width: 0.82,
             height: 1.22,
@@ -197,21 +310,26 @@ function getInpaintWorkAreaAspect(productType: ProductType, prompt: string, shap
     if (productType === "Tunel") return { width: 1.28, height: 0.98, roundness: 0.18 };
     if (productType === "Cort") return { width: 1.32, height: 0.92, roundness: 0.18 };
     if (productType === "Cupolă") return { width: 1.22, height: 0.82, roundness: 0.36 };
-    if (productType === "Sticlă") return { width: 0.56, height: 1.45, roundness: 0.2 };
-    if (productType === "Mascotă") return { width: 0.82, height: 1.22, roundness: 0.28 };
+    if (productType === "Sticlă" || productType === "Replică produs") {
+        return { width: 0.62, height: 1.35, roundness: 0.2 };
+    }
 
     return { width: 0.95, height: 0.95, roundness: 0.28 };
 }
 
 function makeProceduralInflatableSvgDataUrl(options: {
     prompt: string;
-    productType: ProductType;
+    productType: ApiProductType;
     material: MaterialMode;
     lighting: string;
     shapeDetail: number;
 }) {
     const prompt = normalizeText(options.prompt);
-    const isBurger = prompt.includes("burger") || prompt.includes("hamburger");
+    const isBurger =
+        options.productType === "Replică food" ||
+        prompt.includes("burger") ||
+        prompt.includes("hamburger");
+
     const ledGlow = options.material === "LED interior" || options.material === "Alb translucid";
     const night = options.lighting === "Noapte";
     const warm = options.lighting === "Golden hour";
@@ -314,7 +432,6 @@ export default function Page() {
     const [respectBranding, setRespectBranding] = useState(true);
 
     const [heightM, setHeightM] = useState(3);
-    const derived = getDerivedDimensions(selectedProductType, heightM);
 
     const [material, setMaterial] = useState<MaterialMode>("PVC lucios");
     const [lighting, setLighting] = useState("Zi");
@@ -351,6 +468,9 @@ export default function Page() {
     const previewRef = useRef<HTMLDivElement | null>(null);
 
     const subjectPrompt = cleanUserPrompt(userPrompt) || userPrompt.trim();
+    const effectiveProductType = resolveClientProductType(subjectPrompt, selectedProductType);
+    const effectivePreset = PRODUCT_PRESETS[effectiveProductType];
+    const derived = getDerivedDimensions(effectiveProductType, heightM);
     const displayedScene = resultSceneUrl || sceneImage;
 
     const objectFilter = `
@@ -481,7 +601,7 @@ export default function Page() {
         const objectWidthInImagePx = (displayedObjectWidthPx / metrics.imageWidth) * canvas.width;
 
         const areaMultiplier = inpaintAreaScale / 100;
-        const aspect = getInpaintWorkAreaAspect(selectedProductType, subjectPrompt, shapeDetail);
+        const aspect = getInpaintWorkAreaAspect(effectiveProductType, subjectPrompt, shapeDetail);
 
         const minMaskWidth = canvas.width * 0.045;
         const maxMaskWidth = canvas.width * 0.45;
@@ -612,7 +732,7 @@ export default function Page() {
             if (proceduralMode) {
                 const proceduralUrl = makeProceduralInflatableSvgDataUrl({
                     prompt: subjectPrompt,
-                    productType: selectedProductType,
+                    productType: effectiveProductType,
                     material,
                     lighting,
                     shapeDetail,
@@ -641,8 +761,9 @@ export default function Page() {
                     maskImage: maskBase64,
                     prompt: subjectPrompt,
                     userPrompt: subjectPrompt,
-                    productPreset: PRODUCT_PRESETS[selectedProductType],
-                    productType: selectedProductType,
+                    productPreset: effectivePreset,
+                    productType: effectiveProductType,
+                    selectedUiProductType: selectedProductType,
                     placementMode,
                     generateMode,
                     renderPipeline: generateMode === "rapid" ? "overlay" : "inpaint",
@@ -825,6 +946,10 @@ export default function Page() {
                                         </button>
                                     );
                                 })}
+                            </div>
+
+                            <div className="aztec-info-box" style={{ marginTop: 12 }}>
+                                Tip detectat automat: <strong>{effectiveProductType}</strong>
                             </div>
 
                             <div className="aztec-label" style={{ marginTop: 14 }}>
@@ -1386,8 +1511,7 @@ export default function Page() {
                                         lineHeight: 1.4,
                                     }}
                                 >
-                                    În mod FOTO / REPLICĂ se trimite zonă compactă
-                                    pentru inpaint.
+                                    Tip detectat: {effectiveProductType}
                                 </div>
                             </div>
                         </div>
