@@ -133,10 +133,13 @@ function resolveClientProductType(userPrompt: string, selectedType: ProductType)
         containsAny(prompt, [
             "burger",
             "hamburger",
+            "cheeseburger",
             "sandwich",
             "hotdog",
+            "hot dog",
             "pizza",
             "cartof",
+            "cartofi",
             "inghetata",
             "ice cream",
             "shaorma",
@@ -467,6 +470,7 @@ export default function Page() {
     const effectivePreset = PRODUCT_PRESETS[effectiveProductType];
     const derived = getDerivedDimensions(effectiveProductType, heightM);
     const displayedScene = resultSceneUrl || sceneImage;
+    const hasGeneratedVisual = hasGeneratedSimulation || Boolean(overlayUrl || resultSceneUrl);
 
     const objectFilter = `
         ${getObjectFilter(lighting, material)}
@@ -1261,7 +1265,7 @@ export default function Page() {
 
                     <section className="aztec-section">
                         <div className="aztec-section-button aztec-section-button-active">
-                            7. AJUSTARE MOCKUP
+                            7. POZIȚIONARE INIȚIALĂ
                         </div>
 
                         <div className="aztec-section-content">
@@ -1303,107 +1307,121 @@ export default function Page() {
                                 }}
                             />
 
-                            <div className="aztec-slider-header" style={{ marginTop: 12 }}>
-                                <div className="aztec-label">Scală pe imagine</div>
-                                <div className="aztec-slider-value">{overlayScale}%</div>
-                            </div>
-
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={5}
-                                max={120}
-                                value={overlayScale}
-                                onChange={(e) => {
-                                    setOverlayScale(Number(e.target.value));
-                                    clearResults();
-                                }}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 12 }}>
-                                <div className="aztec-label">Mărime zonă inpaint</div>
-                                <div className="aztec-slider-value">{inpaintAreaScale}%</div>
-                            </div>
-
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={80}
-                                max={180}
-                                value={inpaintAreaScale}
-                                onChange={(e) => {
-                                    setInpaintAreaScale(Number(e.target.value));
-                                    clearResults();
-                                }}
-                            />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 12 }}>
-                                <div className="aztec-label">Rotație</div>
-                                <div className="aztec-slider-value">{rotation}°</div>
-                            </div>
-
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={-30}
-                                max={30}
-                                value={rotation}
-                                onChange={(e) => {
-                                    setRotation(Number(e.target.value));
-                                    clearResults();
-                                }}
-                            />
-                        </div>
-                    </section>
-
-                    <section className="aztec-section">
-                        <div className="aztec-section-button aztec-section-button-active">
-                            8. UMBRĂ & INTEGRARE
-                        </div>
-
-                        <div className="aztec-section-content">
-                            <div className="aztec-section-line" />
-
-                            {[
-                                ["Umbră X", shadowX, setShadowX, -40, 40, "%"],
-                                ["Umbră Y", shadowY, setShadowY, -40, 60, "%"],
-                                ["Lățime umbră", shadowScaleX, setShadowScaleX, 10, 180, "%"],
-                                ["Înălțime umbră", shadowScaleY, setShadowScaleY, 2, 100, "%"],
-                                ["Blur umbră", shadowBlur, setShadowBlur, 0, 50, "px"],
-                                ["Opacitate umbră", shadowOpacity, setShadowOpacity, 0, 90, "%"],
-                                ["Skew umbră", shadowSkew, setShadowSkew, -45, 45, "°"],
-                                ["Brightness obiect", objectBrightness, setObjectBrightness, 40, 160, "%"],
-                                ["Contrast obiect", objectContrast, setObjectContrast, 40, 180, "%"],
-                                ["Temperatură obiect", objectWarmth, setObjectWarmth, -60, 80, ""],
-                                ["Opacitate obiect", objectOpacity, setObjectOpacity, 10, 100, "%"],
-                            ].map(([label, value, setter, min, max, unit]) => (
-                                <div key={String(label)} style={{ marginTop: 10 }}>
-                                    <div className="aztec-slider-header">
-                                        <div className="aztec-label">{label as string}</div>
-                                        <div className="aztec-slider-value">
-                                            {value as number}
-                                            {unit as string}
-                                        </div>
+                            {generateMode === "replica" && (
+                                <>
+                                    <div className="aztec-slider-header" style={{ marginTop: 12 }}>
+                                        <div className="aztec-label">Mărime zonă inpaint</div>
+                                        <div className="aztec-slider-value">{inpaintAreaScale}%</div>
                                     </div>
+
                                     <input
                                         className="aztec-slider"
                                         type="range"
-                                        min={min as number}
-                                        max={max as number}
-                                        value={value as number}
+                                        min={80}
+                                        max={180}
+                                        value={inpaintAreaScale}
                                         onChange={(e) => {
-                                            (
-                                                setter as React.Dispatch<
-                                                    React.SetStateAction<number>
-                                                >
-                                            )(Number(e.target.value));
+                                            setInpaintAreaScale(Number(e.target.value));
                                             clearResults();
                                         }}
                                     />
+                                </>
+                            )}
+
+                            {!hasGeneratedVisual && (
+                                <div className="aztec-info-box" style={{ marginTop: 12 }}>
+                                    Click pe imagine sau folosește X/Y pentru punctul de sprijin.
+                                    Controalele de scală, rotație, umbră și integrare apar după generare.
                                 </div>
-                            ))}
+                            )}
+
+                            {hasGeneratedVisual && (
+                                <>
+                                    <div className="aztec-slider-header" style={{ marginTop: 12 }}>
+                                        <div className="aztec-label">Scală pe imagine</div>
+                                        <div className="aztec-slider-value">{overlayScale}%</div>
+                                    </div>
+
+                                    <input
+                                        className="aztec-slider"
+                                        type="range"
+                                        min={5}
+                                        max={120}
+                                        value={overlayScale}
+                                        onChange={(e) => {
+                                            setOverlayScale(Number(e.target.value));
+                                        }}
+                                    />
+
+                                    <div className="aztec-slider-header" style={{ marginTop: 12 }}>
+                                        <div className="aztec-label">Rotație</div>
+                                        <div className="aztec-slider-value">{rotation}°</div>
+                                    </div>
+
+                                    <input
+                                        className="aztec-slider"
+                                        type="range"
+                                        min={-30}
+                                        max={30}
+                                        value={rotation}
+                                        onChange={(e) => {
+                                            setRotation(Number(e.target.value));
+                                        }}
+                                    />
+                                </>
+                            )}
                         </div>
                     </section>
+
+                    {hasGeneratedVisual && (
+                        <section className="aztec-section">
+                            <div className="aztec-section-button aztec-section-button-active">
+                                8. UMBRĂ & INTEGRARE
+                            </div>
+
+                            <div className="aztec-section-content">
+                                <div className="aztec-section-line" />
+
+                                {[
+                                    ["Umbră X", shadowX, setShadowX, -40, 40, "%"],
+                                    ["Umbră Y", shadowY, setShadowY, -40, 60, "%"],
+                                    ["Lățime umbră", shadowScaleX, setShadowScaleX, 10, 180, "%"],
+                                    ["Înălțime umbră", shadowScaleY, setShadowScaleY, 2, 100, "%"],
+                                    ["Blur umbră", shadowBlur, setShadowBlur, 0, 50, "px"],
+                                    ["Opacitate umbră", shadowOpacity, setShadowOpacity, 0, 90, "%"],
+                                    ["Skew umbră", shadowSkew, setShadowSkew, -45, 45, "°"],
+                                    ["Brightness obiect", objectBrightness, setObjectBrightness, 40, 160, "%"],
+                                    ["Contrast obiect", objectContrast, setObjectContrast, 40, 180, "%"],
+                                    ["Temperatură obiect", objectWarmth, setObjectWarmth, -60, 80, ""],
+                                    ["Opacitate obiect", objectOpacity, setObjectOpacity, 10, 100, "%"],
+                                ].map(([label, value, setter, min, max, unit]) => (
+                                    <div key={String(label)} style={{ marginTop: 10 }}>
+                                        <div className="aztec-slider-header">
+                                            <div className="aztec-label">{label as string}</div>
+                                            <div className="aztec-slider-value">
+                                                {value as number}
+                                                {unit as string}
+                                            </div>
+                                        </div>
+                                        <input
+                                            className="aztec-slider"
+                                            type="range"
+                                            min={min as number}
+                                            max={max as number}
+                                            value={value as number}
+                                            onChange={(e) => {
+                                                (
+                                                    setter as React.Dispatch<
+                                                        React.SetStateAction<number>
+                                                    >
+                                                )(Number(e.target.value));
+                                            }}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
 
                     {error && <div className="aztec-error-box">{error}</div>}
 
