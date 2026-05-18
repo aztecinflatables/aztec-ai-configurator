@@ -458,3 +458,57 @@ button {
         min-height: 340px;
     }
 }
+
+.aztec-left-panel {
+    gap: 10px;
+}
+
+.aztec-sections {
+    gap: 10px;
+}
+
+.aztec-section {
+    padding: 14px 16px;
+    border-radius: 16px;
+}
+
+.aztec-section-content {
+    margin-top: 8px;
+}
+
+.aztec-section-line {
+    margin-bottom: 10px;
+}
+
+.aztec-label {
+    margin-bottom: 5px;
+    font-size: 12px;
+}
+
+.aztec-textarea {
+    min-height: 70px;
+}
+
+.aztec-slider-header {
+    margin-bottom: 5px;
+}
+
+.aztec-slider {
+    height: 4px;
+}
+
+.aztec-info-box {
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.aztec-generate-button {
+    margin-top: 8px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
+.aztec-tabs {
+    margin-bottom: 8px;
+}
