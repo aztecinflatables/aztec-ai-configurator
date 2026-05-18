@@ -94,15 +94,7 @@ function cleanUserPrompt(value: string) {
 function resolveClientProductType(userPrompt: string, selectedType: ProductType): ApiProductType {
     const prompt = normalizeText(userPrompt);
 
-    if (
-        containsAny(prompt, [
-            "arcada",
-            "arch",
-            "poarta",
-            "portal",
-            "intrare",
-        ])
-    ) {
+    if (containsAny(prompt, ["arcada", "arch", "poarta", "portal", "intrare"])) {
         return "Arcadă";
     }
 
@@ -432,6 +424,9 @@ export default function Page() {
     const [respectBranding, setRespectBranding] = useState(true);
 
     const [heightM, setHeightM] = useState(3);
+    const [hasGeneratedSimulation, setHasGeneratedSimulation] = useState(false);
+    const [estimatedWidthM, setEstimatedWidthM] = useState<number | null>(null);
+    const [estimatedDepthM, setEstimatedDepthM] = useState<number | null>(null);
 
     const [material, setMaterial] = useState<MaterialMode>("PVC lucios");
     const [lighting, setLighting] = useState("Zi");
@@ -486,6 +481,9 @@ export default function Page() {
         setResultSceneUrl(null);
         setMaskDebugUrl(null);
         setError(null);
+        setHasGeneratedSimulation(false);
+        setEstimatedWidthM(null);
+        setEstimatedDepthM(null);
     };
 
     const fileToBase64 = (file: File): Promise<string> => {
@@ -739,6 +737,9 @@ export default function Page() {
                 });
 
                 setOverlayUrl(proceduralUrl);
+                setHasGeneratedSimulation(true);
+                setEstimatedWidthM(derived.widthM);
+                setEstimatedDepthM(derived.depthM);
                 setLoading(false);
                 return;
             }
@@ -766,7 +767,7 @@ export default function Page() {
                     selectedUiProductType: selectedProductType,
                     placementMode,
                     generateMode,
-                    renderPipeline: generateMode === "rapid" ? "overlay" : "inpaint",
+                    renderPipeline: generateMode === "replica" ? "inpaint" : "overlay",
                     referenceControl: {
                         respectReference,
                         respectShape,
@@ -816,9 +817,17 @@ export default function Page() {
             if (data.compositedUrl || data.resultSceneUrl || data.finalImageUrl) {
                 setResultSceneUrl(data.compositedUrl || data.resultSceneUrl || data.finalImageUrl);
                 setOverlayUrl(null);
+
+                setHasGeneratedSimulation(true);
+                setEstimatedWidthM(derived.widthM);
+                setEstimatedDepthM(derived.depthM);
             } else if (data.overlayUrl) {
                 setOverlayUrl(data.overlayUrl);
                 setResultSceneUrl(null);
+
+                setHasGeneratedSimulation(true);
+                setEstimatedWidthM(derived.widthM);
+                setEstimatedDepthM(derived.depthM);
             } else {
                 throw new Error("API-ul nu a returnat un rezultat valid.");
             }
@@ -861,7 +870,7 @@ export default function Page() {
                                 onChange={handleSceneUpload}
                             />
 
-                            <div className="aztec-label" style={{ marginTop: 14 }}>
+                            <div className="aztec-label" style={{ marginTop: 10 }}>
                                 Imagine referință produs
                             </div>
                             <input
@@ -871,7 +880,7 @@ export default function Page() {
                                 onChange={handleRefUpload}
                             />
 
-                            <div className="aztec-label" style={{ marginTop: 14 }}>
+                            <div className="aztec-label" style={{ marginTop: 10 }}>
                                 Logo / print / textură custom
                             </div>
                             <input
@@ -902,7 +911,7 @@ export default function Page() {
                                 placeholder="Ex: burger, arcadă AZTEC, mascotă urs, sticlă de suc..."
                             />
 
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
                                 {(
                                     [
                                         "Arcadă",
@@ -933,13 +942,10 @@ export default function Page() {
                                                     : "rgba(255,255,255,0.04)",
                                                 color: "white",
                                                 borderRadius: 999,
-                                                padding: "8px 12px",
+                                                padding: "7px 11px",
                                                 cursor: "pointer",
                                                 fontWeight: 800,
                                                 fontSize: 12,
-                                                boxShadow: active
-                                                    ? "0 8px 18px rgba(255,106,0,0.25)"
-                                                    : "none",
                                             }}
                                         >
                                             {chip}
@@ -948,11 +954,11 @@ export default function Page() {
                                 })}
                             </div>
 
-                            <div className="aztec-info-box" style={{ marginTop: 12 }}>
+                            <div className="aztec-info-box" style={{ marginTop: 10 }}>
                                 Tip detectat automat: <strong>{effectiveProductType}</strong>
                             </div>
 
-                            <div className="aztec-label" style={{ marginTop: 14 }}>
+                            <div className="aztec-label" style={{ marginTop: 10 }}>
                                 Poziționare
                             </div>
 
@@ -1026,7 +1032,7 @@ export default function Page() {
                                         ? "aztec-tab aztec-tab-active"
                                         : "aztec-tab"
                                 }
-                                style={{ width: "100%", marginTop: 10 }}
+                                style={{ width: "100%", marginTop: 8 }}
                             >
                                 REPLICĂ EXACTĂ
                             </button>
@@ -1062,8 +1068,8 @@ export default function Page() {
                                 style={{
                                     display: "grid",
                                     gridTemplateColumns: "1fr 1fr",
-                                    gap: 10,
-                                    marginTop: 14,
+                                    gap: 8,
+                                    marginTop: 10,
                                 }}
                             >
                                 <label className="aztec-checkbox-row">
@@ -1147,15 +1153,38 @@ export default function Page() {
                                 }}
                             />
 
-                            <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                Dimensiuni estimate:
+                            <div className="aztec-slider-header" style={{ marginTop: 12 }}>
+                                <div className="aztec-label">Detaliu formă</div>
+                                <div className="aztec-slider-value">{shapeDetail}%</div>
+                            </div>
+
+                            <input
+                                className="aztec-slider"
+                                type="range"
+                                min={0}
+                                max={100}
+                                value={shapeDetail}
+                                onChange={(e) => {
+                                    setShapeDetail(Number(e.target.value));
+                                    clearResults();
+                                }}
+                            />
+
+                            <div className="aztec-info-box" style={{ marginTop: 10 }}>
+                                Dimensiuni pentru deviz:
                                 <br />
                                 <strong style={{ color: "#FFFFFF" }}>
-                                    Înălțime: {heightM.toFixed(1)} m
+                                    Înălțime țintă: {heightM.toFixed(1)} m
                                     <br />
-                                    Lățime: {derived.widthM.toFixed(1)} m
+                                    Lățime:{" "}
+                                    {hasGeneratedSimulation && estimatedWidthM !== null
+                                        ? `${estimatedWidthM.toFixed(1)} m`
+                                        : "se estimează după generare"}
                                     <br />
-                                    Lungime / adâncime: {derived.depthM.toFixed(1)} m
+                                    Lungime / adâncime:{" "}
+                                    {hasGeneratedSimulation && estimatedDepthM !== null
+                                        ? `${estimatedDepthM.toFixed(1)} m`
+                                        : "se estimează după generare"}
                                 </strong>
                             </div>
                         </div>
@@ -1185,7 +1214,7 @@ export default function Page() {
                                 <option>Outdoor heavy-duty</option>
                             </select>
 
-                            <div className="aztec-label" style={{ marginTop: 12 }}>
+                            <div className="aztec-label" style={{ marginTop: 10 }}>
                                 Lumină / mediu
                             </div>
                             <select
@@ -1256,7 +1285,7 @@ export default function Page() {
                                 }}
                             />
 
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                            <div className="aztec-slider-header" style={{ marginTop: 12 }}>
                                 <div className="aztec-label">Poziție Y</div>
                                 <div className="aztec-slider-value">{posY.toFixed(1)}%</div>
                             </div>
@@ -1274,7 +1303,7 @@ export default function Page() {
                                 }}
                             />
 
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                            <div className="aztec-slider-header" style={{ marginTop: 12 }}>
                                 <div className="aztec-label">Scală pe imagine</div>
                                 <div className="aztec-slider-value">{overlayScale}%</div>
                             </div>
@@ -1291,7 +1320,7 @@ export default function Page() {
                                 }}
                             />
 
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                            <div className="aztec-slider-header" style={{ marginTop: 12 }}>
                                 <div className="aztec-label">Mărime zonă inpaint</div>
                                 <div className="aztec-slider-value">{inpaintAreaScale}%</div>
                             </div>
@@ -1308,7 +1337,7 @@ export default function Page() {
                                 }}
                             />
 
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
+                            <div className="aztec-slider-header" style={{ marginTop: 12 }}>
                                 <div className="aztec-label">Rotație</div>
                                 <div className="aztec-slider-value">{rotation}°</div>
                             </div>
@@ -1324,29 +1353,6 @@ export default function Page() {
                                     clearResults();
                                 }}
                             />
-
-                            <div className="aztec-slider-header" style={{ marginTop: 14 }}>
-                                <div className="aztec-label">Detaliu formă</div>
-                                <div className="aztec-slider-value">{shapeDetail}%</div>
-                            </div>
-
-                            <input
-                                className="aztec-slider"
-                                type="range"
-                                min={0}
-                                max={100}
-                                value={shapeDetail}
-                                onChange={(e) => {
-                                    setShapeDetail(Number(e.target.value));
-                                    clearResults();
-                                }}
-                            />
-
-                            <div className="aztec-info-box" style={{ marginTop: 12 }}>
-                                Scală pe imagine controlează mărimea obiectului. Mărime zonă inpaint
-                                controlează cât spațiu primește AI-ul pentru obiect, contact și umbră.
-                                Recomandat: Scală 28–35%, zonă inpaint 110–130%.
-                            </div>
                         </div>
                     </section>
 
@@ -1371,7 +1377,7 @@ export default function Page() {
                                 ["Temperatură obiect", objectWarmth, setObjectWarmth, -60, 80, ""],
                                 ["Opacitate obiect", objectOpacity, setObjectOpacity, 10, 100, "%"],
                             ].map(([label, value, setter, min, max, unit]) => (
-                                <div key={String(label)} style={{ marginTop: 14 }}>
+                                <div key={String(label)} style={{ marginTop: 10 }}>
                                     <div className="aztec-slider-header">
                                         <div className="aztec-label">{label as string}</div>
                                         <div className="aztec-slider-value">
